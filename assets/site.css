@@ -180,17 +180,51 @@ h1 {
   position: relative;
 }
 .device {
+  --bezel: 10px;
+  --screen-radius: 34px;
   width: min(270px, 100%);
-  border-radius: 32px;
-  padding: 0;
-  background: #000;
-  box-shadow: var(--shadow);
-  overflow: hidden;
+  position: relative;
+  border-radius: calc(var(--screen-radius) + var(--bezel));
+  padding: var(--bezel);
+  background:
+    linear-gradient(165deg, #4a4d56 0%, #1c1e24 16%, #0b0c0f 52%, #181a20 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.28),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 0 1px #050506,
+    var(--shadow);
 }
 .device img {
   display: block;
   width: 100%;
-  border-radius: 32px;
+  border-radius: var(--screen-radius);
+}
+.device::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--bezel) + 9px);
+  left: 50%;
+  width: 78px;
+  height: 22px;
+  transform: translateX(-50%);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle 3.5px at 74% 50%, #243044 100%, transparent 100%),
+    #050505;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+.device::after {
+  content: "";
+  position: absolute;
+  right: -2.5px;
+  top: 22%;
+  width: 3px;
+  height: 52px;
+  border-radius: 1px 2px 2px 1px;
+  background: linear-gradient(#5a5d66, #1a1b1f);
+  pointer-events: none;
 }
 .device.back {
   width: min(230px, 42%);
