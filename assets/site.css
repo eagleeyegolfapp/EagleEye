@@ -181,16 +181,16 @@ h1 {
 }
 .device {
   width: min(270px, 100%);
-  border-radius: 38px;
-  padding: 10px;
-  background: linear-gradient(180deg, #1a1c22, #0a0b0d);
-  border: 1px solid var(--line-strong);
+  border-radius: 32px;
+  padding: 0;
+  background: #000;
   box-shadow: var(--shadow);
+  overflow: hidden;
 }
 .device img {
   display: block;
   width: 100%;
-  border-radius: 28px;
+  border-radius: 32px;
 }
 .device.back {
   width: min(230px, 42%);
