@@ -3,71 +3,142 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>EagleEye</title>
-  <meta name="description" content="EagleEye — personal golf scoring and stats." />
-  <style>
-    :root {
-      color-scheme: light dark;
-      --bg: #0c0d0f;
-      --fg: #f2efe6;
-      --muted: #a39e90;
-      --accent: #d4b347;
-      --border: #2a2d33;
-    }
-    @media (prefers-color-scheme: light) {
-      :root {
-        --bg: #f7f4ee;
-        --fg: #1a1b1e;
-        --muted: #5c584e;
-        --accent: #9a7b1f;
-        --border: #e2ddd0;
-      }
-    }
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg);
-      color: var(--fg);
-      line-height: 1.55;
-    }
-    main {
-      max-width: 36rem;
-      margin: 0 auto;
-      padding: 3rem 1.25rem 4rem;
-    }
-    h1 {
-      font-size: 1.85rem;
-      letter-spacing: -0.02em;
-      margin: 0 0 0.5rem;
-    }
-    p { color: var(--muted); }
-    a { color: var(--accent); }
-    nav {
-      margin-top: 1.5rem;
-      padding-top: 1.25rem;
-      border-top: 1px solid var(--border);
-    }
-    nav a {
-      margin-right: 1rem;
-      font-weight: 600;
-      text-decoration: none;
-    }
-    nav a:hover { text-decoration: underline; }
-  </style>
+  <title>EagleEye — Golf GPS &amp; stats on iPhone</title>
+  <meta name="description" content="Personal golf scoring, GPS flyovers, and stats on your iPhone. Data stays on your device. No subscriptions, no ads." />
+  <link rel="canonical" href="https://eagleeyegolfapp.github.io/EagleEye/" />
+  <meta property="og:title" content="EagleEye — See every shot. Master every round." />
+  <meta property="og:description" content="Golf GPS flyover and honest stats. No subscription. Rounds stay on your iPhone." />
+  <meta property="og:image" content="https://eagleeyegolfapp.github.io/EagleEye/assets/og.jpg" />
+  <meta property="og:url" content="https://eagleeyegolfapp.github.io/EagleEye/" />
+  <meta name="theme-color" content="#07080a" />
+  <link rel="icon" type="image/png" href="assets/favicon-32.png" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&amp;display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/site.css" />
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"EagleEye","operatingSystem":"iOS","applicationCategory":"SportsApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"url":"https://apps.apple.com/app/id6793305657"}
+  </script>
 </head>
 <body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="index.html">
+        <img src="assets/icon.png" width="34" height="34" alt="" />
+        <span>EagleEye</span>
+      </a>
+      <nav class="nav" aria-label="Primary">
+        <a class="hide-sm" href="index.html#flyover">Flyover</a>
+        <a class="hide-sm" href="index.html#stats">Stats</a>
+        <a href="support.html">Support</a>
+        <a href="privacy.html">Privacy</a>
+        <a class="btn" href="https://apps.apple.com/app/id6793305657">App Store</a>
+      </nav>
+    </div>
+  </header>
+
   <main>
-    <h1>EagleEye</h1>
-    <p>Personal golf scoring, GPS flyovers, and stats on your iPhone. Data stays on your device. No subscriptions, no ads.</p>
-    <nav>
-      <a href="https://apps.apple.com/app/id6793305657">App Store</a>
-      <a href="support.html">Support</a>
-      <a href="privacy.html">Privacy Policy</a>
-    </nav>
-    <p style="margin-top:2rem;font-size:0.95rem">
-      Contact:
-      <a href="mailto:eagleeyegolfapp@gmail.com">eagleeyegolfapp@gmail.com</a>
-    </p>
+    <section class="wrap hero">
+      <div>
+        <p class="kicker">iPhone golf</p>
+        <h1>See every shot.<br />Master every round.</h1>
+        <p class="lede">
+          Personal golf scoring, GPS flyovers, and stats on your iPhone.
+          Data stays on your device. No subscriptions, no ads.
+        </p>
+        <div class="cta-row">
+          <a class="btn" href="https://apps.apple.com/app/id6793305657">Download on the App Store</a>
+          <a class="btn btn-ghost" href="mailto:eagleeyegolfapp@gmail.com">Contact</a>
+        </div>
+        <p class="fine">Free to try — 3 finished rounds or 60 holes. Then a one-time unlock.</p>
+      </div>
+      <div class="phones" aria-hidden="false">
+        <div class="device back">
+          <img src="assets/shot-stats.jpg" alt="EagleEye stats" />
+        </div>
+        <div class="device front">
+          <img src="assets/shot-home.jpg" alt="EagleEye Home on iPhone" />
+        </div>
+      </div>
+    </section>
+
+    <div class="wrap">
+      <div class="proof">
+        <div><strong>On your iPhone</strong><span>Rounds never leave this device unless you export them.</span></div>
+        <div><strong>No monthly bill</strong><span>Try the full app, then unlock once — not $15 every month.</span></div>
+        <div><strong>No OSM account</strong><span>Flyover uses public map data. You don’t create a login.</span></div>
+      </div>
+    </div>
+
+    <section class="wrap section" id="flyover">
+      <h2>Satellite flyover of the hole</h2>
+      <p class="intro">GPS-powered Flyover shows the hole on satellite imagery — yardage, aim, and the green — without a cartoon map or an OpenStreetMap account.</p>
+      <div class="grid-3">
+        <article class="card">
+          <div class="icon-dot">01</div>
+          <h3>See the hole</h3>
+          <p>Satellite view with gold distance lines, pin, and GPS when you want it. Zoom in for the green.</p>
+        </article>
+        <article class="card">
+          <div class="icon-dot">02</div>
+          <h3>Courses on the phone</h3>
+          <p>Search the US course pack, tap Add, and the scorecard fills in. Flyover links when the layout is mapped.</p>
+        </article>
+        <article class="card">
+          <div class="icon-dot">03</div>
+          <h3>Fast on the tee</h3>
+          <p>Tag the tee club you actually hit, where it finished, and move on. Built for a real round, not a desk.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="wrap section" id="stats">
+      <h2>Stats that don’t cheat</h2>
+      <p class="intro">GIR, fairways, misses, leaks, and club splits — counted only when you tag them. Untagged holes and “No chance” layups are not fake misses.</p>
+      <div class="shots">
+        <figure>
+          <div class="device" style="width:100%;max-width:280px;margin:0 auto;transform:none">
+            <img src="assets/shot-home.jpg" alt="EagleEye home dashboard" />
+          </div>
+          <figcaption>Home — form, goals, next round</figcaption>
+        </figure>
+        <figure>
+          <div class="device" style="width:100%;max-width:280px;margin:0 auto;transform:none">
+            <img src="assets/shot-flyover.jpg" alt="EagleEye hole flyover" />
+          </div>
+          <figcaption>Flyover — the hole, not a cartoon</figcaption>
+        </figure>
+        <figure>
+          <div class="device" style="width:100%;max-width:280px;margin:0 auto;transform:none">
+            <img src="assets/shot-stats.jpg" alt="EagleEye approach stats" />
+          </div>
+          <figcaption>Approach &amp; GIR — tagged honestly</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="wrap section">
+      <h2>Your game. Your data.</h2>
+      <p class="intro">No EagleEye cloud account. Optional location, camera, and photos only when you turn them on. Export a backup from Settings whenever you want.</p>
+      <div class="cta-row">
+        <a class="btn" href="https://apps.apple.com/app/id6793305657">Get EagleEye</a>
+        <a class="btn btn-ghost" href="privacy.html">Privacy Policy</a>
+        <a class="btn btn-ghost" href="support.html">Support</a>
+      </div>
+    </section>
   </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>EagleEye — personal golf tracking on your device.</p>
+      <nav>
+        <a href="https://apps.apple.com/app/id6793305657">App Store</a>
+        <a href="support.html">Support</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="mailto:eagleeyegolfapp@gmail.com">eagleeyegolfapp@gmail.com</a>
+      </nav>
+    </div>
+  </footer>
 </body>
 </html>
