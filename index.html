@@ -4,10 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>EagleEye — See every shot. Master every round.</title>
-  <meta name="description" content="The golf app with no account, no ads, and no monthly fee. Satellite flyover of every hole and the deepest stats on iPhone — your game stays on your phone." />
+  <meta name="description" content="The golf app with no account, no ads, and no monthly fee. Satellite flyover of every hole, approach and green maps, and the deepest stats on iPhone — your game stays on your phone." />
   <link rel="canonical" href="https://eagleeyegolfapp.github.io/EagleEye/" />
   <meta property="og:title" content="EagleEye — See every shot. Master every round." />
-  <meta property="og:description" content="No account. No ads. No subscription. Satellite flyover and tour-level stats, on your iPhone." />
+  <meta property="og:description" content="No account. No ads. No subscription. Satellite flyover, approach maps, and tour-level stats, on your iPhone." />
   <meta property="og:image" content="https://eagleeyegolfapp.github.io/EagleEye/assets/og-logo.jpg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
@@ -22,7 +22,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&amp;display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/site.css?v=iphone" />
+  <link rel="stylesheet" href="assets/site.css?v=v3" />
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"SoftwareApplication","name":"EagleEye","operatingSystem":"iOS","applicationCategory":"SportsApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"url":"https://apps.apple.com/app/id6793305657"}
   </script>
@@ -36,6 +36,7 @@
       </a>
       <nav class="nav" aria-label="Primary">
         <a class="hide-sm" href="index.html#flyover">Flyover</a>
+        <a class="hide-sm" href="index.html#approach">Approach</a>
         <a class="hide-sm" href="index.html#stats">Stats</a>
         <a href="support.html">Support</a>
         <a href="privacy.html">Privacy</a>
@@ -61,11 +62,11 @@
         <p class="fine">Try it free. Unlock once — less than a single green fee, forever.</p>
       </div>
       <div class="phones" aria-hidden="false">
-        <div class="device back">
-          <img src="assets/ui-home.jpg" alt="EagleEye home" />
+        <div class="poster back">
+          <img src="assets/ui-play.jpg" alt="EagleEye Play — pick a course and start a round" width="900" height="1951" />
         </div>
-        <div class="device front">
-          <img src="assets/ui-flyover.jpg" alt="EagleEye satellite flyover of a golf hole" />
+        <div class="poster front">
+          <img src="assets/ui-hero.jpg" alt="EagleEye home — See every shot" width="900" height="1951" />
         </div>
       </div>
     </section>
@@ -98,27 +99,89 @@
           <p>Thousands of U.S. courses ready on your phone. Find it, add it, and you’re on the first tee.</p>
         </article>
       </div>
+      <div class="shots shots-2">
+        <figure>
+          <div class="poster">
+            <img src="assets/ui-flyover.jpg" alt="EagleEye satellite flyover with plays-like yardage" width="900" height="1951" />
+          </div>
+          <figcaption>The hole from above, with the number you actually need</figcaption>
+        </figure>
+        <figure>
+          <div class="poster">
+            <img src="assets/ui-flyover-2.jpg" alt="EagleEye flyover close-up of the landing area" width="900" height="1951" />
+          </div>
+          <figcaption>Zoom the landing, keep GPS yards under plays-like</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="wrap feature" id="approach">
+      <div class="feature-copy">
+        <p class="kicker">Into the green</p>
+        <h2>Approach and green overviews</h2>
+        <p class="intro">Not just a GIR percentage. See whether you miss left, right, or short — a picture of the green, so practice has a side, not a guess.</p>
+        <ul class="feature-list">
+          <li>On, short, left, and right — the shape of your misses, not a single total</li>
+          <li>Toggle greens in regulation vs every shot at the green</li>
+          <li>Birdie conversion and “GIR, then bogey” when a good approach still leaks</li>
+        </ul>
+      </div>
+      <div class="feature-media">
+        <div class="poster">
+          <img src="assets/ui-approach.jpg" alt="EagleEye approach map showing shots onto and around the green" width="900" height="1951" />
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap feature reverse" id="short-game">
+      <div class="feature-copy">
+        <p class="kicker">Around the green</p>
+        <h2>Short game, counted honestly</h2>
+        <p class="intro">Putting mix, scramble, and sand. The part of the round that doesn’t show up in driving stats — and usually where the score is made.</p>
+        <ul class="feature-list">
+          <li>Putts per hole, plus 1-putt / 2-putt / 3-putt mix</li>
+          <li>Scramble as par or better after missing the green</li>
+          <li>Sand saves, chips, and bunker frequency — together, not buried in a total</li>
+        </ul>
+      </div>
+      <div class="feature-media">
+        <div class="poster">
+          <img src="assets/ui-shortgame.jpg" alt="EagleEye short game stats — putting, scramble, and sand" width="900" height="1951" />
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap feature" id="tee">
+      <div class="feature-copy">
+        <p class="kicker">Off the tee</p>
+        <h2>Fairways and miss patterns</h2>
+        <p class="intro">Where your tee shots actually finish. Fairway, left, right, short — a picture you can practice to, not a memory of last Saturday.</p>
+        <ul class="feature-list">
+          <li>Fairways in regulation with a live miss map</li>
+          <li>Average tee-shot distance, tagged by club if you want it</li>
+          <li>Fairway-to-GIR vs miss-to-GIR, so you see the cost of the miss</li>
+        </ul>
+      </div>
+      <div class="feature-media">
+        <div class="poster">
+          <img src="assets/ui-fairways.jpg" alt="EagleEye tee-shot dispersion map on a fairway" width="900" height="1951" />
+        </div>
+      </div>
     </section>
 
     <section class="wrap section" id="stats">
       <h2>Stats deep enough to change how you play</h2>
-      <p class="intro">Not a few totals on a scorecard. EagleEye shows exactly where strokes walk away — off the tee, into the green, on the putting surface — so practice has a target, not a guess.</p>
-      <div class="shots">
+      <p class="intro">Not a few totals on a scorecard. EagleEye shows exactly where strokes walk away — off the tee, into the green, on the putting surface — so the next range session has a target.</p>
+      <div class="shots shots-2">
         <figure>
-          <div class="device" style="width:100%;max-width:280px;margin:0 auto;transform:none">
-            <img src="assets/ui-home.jpg" alt="EagleEye home dashboard" />
+          <div class="poster">
+            <img src="assets/ui-stats.jpg" alt="EagleEye stats home — scoring, GIR, tee, short game" width="900" height="1951" />
           </div>
           <figcaption>Your season, at a glance</figcaption>
         </figure>
         <figure>
-          <div class="device" style="width:100%;max-width:280px;margin:0 auto;transform:none">
-            <img src="assets/ui-flyover.jpg" alt="EagleEye hole flyover" />
-          </div>
-          <figcaption>Flyover of the hole you’re on</figcaption>
-        </figure>
-        <figure>
-          <div class="device" style="width:100%;max-width:280px;margin:0 auto;transform:none">
-            <img src="assets/ui-stats.jpg" alt="EagleEye stroke analysis" />
+          <div class="poster">
+            <img src="assets/ui-leaks.jpg" alt="EagleEye leaks — where strokes slip away compared with your level" width="900" height="1951" />
           </div>
           <figcaption>Where you actually lose shots</figcaption>
         </figure>
