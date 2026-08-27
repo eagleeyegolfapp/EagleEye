@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>Course shared via EagleEye</title>
+  <meta name="description" content="Open this course in EagleEye to import it to your library."/>
+  <link rel="canonical" href="https://eagleeyegolfapp.github.io/EagleEye/c.html"/>
+  <meta property="og:site_name" content="EagleEye"/>
+  <meta property="og:type" content="website"/>
+  <meta property="og:title" content="Course shared via EagleEye"/>
+  <meta property="og:description" content="Tap to open in EagleEye and import this course."/>
+  <meta property="og:image" content="https://eagleeyegolfapp.github.io/EagleEye/assets/og-logo.jpg"/>
+  <meta property="og:image:width" content="1200"/>
+  <meta property="og:image:height" content="630"/>
+  <meta property="og:url" content="https://eagleeyegolfapp.github.io/EagleEye/c.html"/>
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="Course shared via EagleEye"/>
+  <meta name="twitter:description" content="Tap to open in EagleEye and import this course."/>
+  <meta name="twitter:image" content="https://eagleeyegolfapp.github.io/EagleEye/assets/og-logo.jpg"/>
+  <meta name="theme-color" content="#07080a"/>
+  <meta name="apple-itunes-app" content="app-id=6793305657"/>
+  <link rel="icon" type="image/png" href="assets/favicon-32.png"/>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      min-height: 100vh; min-height: 100dvh;
+      display: flex; align-items: center; justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "DM Sans", sans-serif;
+      background: #07080a; color: #f4f0e6; padding: 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+    body::before {
+      content: ""; position: fixed; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse at 82% 12%, rgba(212,179,71,0.22), transparent 55%);
+    }
+    .card {
+      position: relative; width: min(400px, 100%);
+      border-radius: 28px; padding: 28px 22px 22px; text-align: center;
+      background: #111318;
+      border: 1.5px solid rgba(212, 179, 71, 0.45);
+      box-shadow: 0 0 48px rgba(212, 179, 71, 0.12), 0 28px 80px rgba(0,0,0,0.45);
+    }
+    .logo {
+      width: 88px; height: 88px; border-radius: 22px; object-fit: cover;
+      border: 1px solid rgba(212, 179, 71, 0.4);
+    }
+    .brand {
+      margin-top: 14px; font-size: 12px; font-weight: 700; letter-spacing: 0.18em;
+      text-transform: uppercase; color: #e6c76b;
+    }
+    h1 { margin: 12px 0 8px; font-size: 1.55rem; line-height: 1.2; font-weight: 800; color: #fff; }
+    p { margin: 0; color: rgba(230, 199, 107, 0.88); font-size: 0.98rem; line-height: 1.45; }
+    .btn {
+      display: block; margin-top: 22px; padding: 16px 16px; border-radius: 14px;
+      background: linear-gradient(180deg, #e0c15a, #b8922a); color: #1a1408;
+      text-decoration: none; font-weight: 800; font-size: 1.05rem;
+    }
+    .btn.secondary {
+      margin-top: 10px; background: transparent; border: 1px solid rgba(212,175,55,0.4);
+      color: #e6c85a; font-weight: 700; font-size: 0.95rem;
+    }
+    .hint { margin-top: 16px; font-size: 0.82rem; color: rgba(245,240,228,0.45); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img class="logo" alt="EagleEye" src="assets/icon.png" width="88" height="88"/>
+    <div class="brand">EagleEye</div>
+    <h1 id="title">Shared course</h1>
+    <p id="sub">Open in EagleEye to add this course to your library.</p>
+    <a class="btn" id="open" href="bogeybuddy://import-course">Open in EagleEye</a>
+    <a class="btn secondary" id="store" href="https://apps.apple.com/app/id6793305657">Get EagleEye on the App Store</a>
+    <p class="hint" id="hint">If nothing happens, tap Open in EagleEye.</p>
+  </div>
+  <script>
+  (function () {
+    var store = "https://apps.apple.com/app/id6793305657";
+    function params() {
+      try {
+        var hash = (location.hash || "").replace(/^#/, "");
+        var query = (location.search || "").replace(/^\?/, "");
+        return new URLSearchParams(query || hash);
+      } catch (e) { return new URLSearchParams(); }
+    }
+    var p = params();
+    var d = p.get("d") || "";
+    var n = p.get("n") || "";
+    if (n) {
+      try { n = decodeURIComponent(n); } catch (e) {}
+      document.getElementById("title").textContent = n;
+      document.title = n + " · EagleEye";
+    }
+    var app = "bogeybuddy://import-course";
+    if (d) app = "bogeybuddy://import-course?v=1&d=" + d;
+    var open = document.getElementById("open");
+    open.href = app;
+    document.getElementById("store").href = store;
+    var itunes = document.querySelector('meta[name="apple-itunes-app"]');
+    if (itunes) itunes.setAttribute("content", "app-id=6793305657, app-argument=" + app);
+
+    function goApp() {
+      try { location.href = app; } catch (e) {}
+    }
+    // First try: custom scheme (works when EagleEye is installed).
+    goApp();
+    setTimeout(goApp, 120);
+    // Do not bounce to the App Store — leave the gold Open button for a real tap.
+  })();
+  </script>
+</body>
+</html>
