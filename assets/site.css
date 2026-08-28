@@ -269,7 +269,11 @@ h1 {
 .feature.reverse .feature-copy { order: 2; }
 .feature .intro { margin-bottom: 18px; }
 .feature-media { display: flex; justify-content: center; }
-.feature-media .poster { width: min(340px, 100%); }
+.feature-media .device, .shot-phone {
+  width: min(280px, 100%);
+  margin: 0 auto;
+  transform: none;
+}
 .feature-list {
   margin: 0;
   padding: 0;
@@ -300,6 +304,7 @@ h1 {
   margin-top: 36px;
 }
 .shots .poster { width: 100%; max-width: 340px; margin: 0 auto; }
+.shots .device { transform: none; }
 
 .proof {
   display: grid;
@@ -449,7 +454,7 @@ article.legal li { margin: 0.38rem 0; }
   .device.back, .poster.back { display: none; }
   .device.front, .poster.front { transform: none; width: min(280px, 78%); margin: 0 auto; }
   .feature.reverse .feature-copy { order: 0; }
-  .feature-media .poster { width: min(300px, 86%); }
+  .feature-media .poster, .feature-media .device { width: min(280px, 86%); }
   .nav .hide-sm { display: none; }
   h1 { font-size: 2.5rem; }
   .hero { padding-top: 40px; gap: 28px; }
