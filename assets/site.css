@@ -140,8 +140,8 @@ a:hover { color: var(--gold-soft); }
 .hero {
   padding: 72px 0 40px;
   display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  gap: 48px;
+  grid-template-columns: minmax(280px, 1fr) auto;
+  gap: 40px;
   align-items: center;
 }
 .kicker {
@@ -176,13 +176,15 @@ h1 {
 .phones {
   display: flex;
   justify-content: center;
-  gap: 16px;
+  align-items: flex-start;
+  gap: 20px;
   position: relative;
 }
 .device {
   --bezel: 10px;
   --screen-radius: 34px;
-  width: min(270px, 100%);
+  width: 280px;
+  max-width: 100%;
   position: relative;
   border-radius: calc(var(--screen-radius) + var(--bezel));
   padding: var(--bezel);
@@ -229,16 +231,19 @@ h1 {
   background: linear-gradient(#5a5d66, #1a1b1f);
   pointer-events: none;
 }
-.device.back,
-.device.front {
-  width: min(270px, 52%);
+.phones .device {
+  width: 280px;
+  flex: 0 0 280px;
+  transform: none;
+  margin-top: 0;
+  opacity: 1;
 }
-.device.back {
-  margin-top: 40px;
-  opacity: 0.92;
-  transform: rotate(6deg);
+.shots .device {
+  width: 100%;
+  max-width: 280px;
+  margin: 0 auto;
+  transform: none;
 }
-.device.front { z-index: 1; transform: rotate(-4deg); }
 
 .proof {
   display: grid;
@@ -385,8 +390,13 @@ article.legal li { margin: 0.38rem 0; }
 
 @media (max-width: 860px) {
   .hero, .grid-3, .shots, .proof { grid-template-columns: 1fr; }
-  .device.back { display: none; }
-  .device.front { transform: none; width: min(280px, 78%); margin: 0 auto; }
+  .phones .device.back { display: none; }
+  .phones { justify-content: center; }
+  .phones .device {
+    width: min(280px, 78%);
+    flex: 0 0 auto;
+    margin: 0 auto;
+  }
   .nav .hide-sm { display: none; }
   h1 { font-size: 2.5rem; }
   .hero { padding-top: 40px; gap: 28px; }
