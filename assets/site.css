@@ -197,6 +197,9 @@ h1 {
 .device img {
   display: block;
   width: 100%;
+  aspect-ratio: 720 / 1564;
+  object-fit: cover;
+  object-position: top center;
   border-radius: var(--screen-radius);
 }
 .device::before {
@@ -226,10 +229,13 @@ h1 {
   background: linear-gradient(#5a5d66, #1a1b1f);
   pointer-events: none;
 }
+.device.back,
+.device.front {
+  width: min(270px, 52%);
+}
 .device.back {
-  width: min(230px, 42%);
-  margin-top: 48px;
-  opacity: 0.88;
+  margin-top: 40px;
+  opacity: 0.92;
   transform: rotate(6deg);
 }
 .device.front { z-index: 1; transform: rotate(-4deg); }
