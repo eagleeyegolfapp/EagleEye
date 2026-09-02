@@ -220,6 +220,16 @@ def slot_preview(cfg: dict) -> list[dict]:
     days = posting_days(cfg)
     out = []
     for slot in iter_slots(cfg):
+        t = slot["time"]
+        user_dt = None
+        raw_d = slot.get("date") or ""
+        if raw_d:
+            try:
+                hour, minute = parse_hhmm(t)
+                y, mo, d = (int(x) for x in raw_d.split("-"))
+                user_dt = datetime(y, mo, d, hour, minute, tzinfo=TZ)
+            except ValueError:
+                user_dt = None
         dt = slot_next(slot, now, days)
         for _ in range(14):
             if dt.weekday() not in days:
@@ -229,11 +239,15 @@ def slot_preview(cfg: dict) -> list[dict]:
             if key not in booked:
                 break
             dt += timedelta(days=1)
+        user_key = f"{raw_d} {t}" if raw_d else ""
         out.append(
             {
-                "time": slot["time"],
-                "date": dt.strftime("%Y-%m-%d"),
-                "next": dt.strftime("%Y-%m-%d %H:%M"),
+                "time": t,
+                "date": raw_d or dt.strftime("%Y-%m-%d"),
+                "next": (f"{raw_d} {t}" if raw_d else dt.strftime("%Y-%m-%d %H:%M")),
+                "fire": dt.strftime("%Y-%m-%d %H:%M"),
+                "booked": bool(user_key and user_key in booked),
+                "past": bool(user_dt and user_dt <= now),
             }
         )
     return out

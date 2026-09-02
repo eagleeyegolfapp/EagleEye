@@ -468,21 +468,32 @@ function nowStampET(){
   const p = etParts(new Date());
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
-function bindSlotRow(row){
+function paintRowLabel(row, info){
+  const t = row.querySelector("[data-slot]").value;
+  const d = row.querySelector("[data-date]").value;
+  const lab = row.querySelector("[data-lab]");
+  if (!lab) return;
+  if (!d || !t) { lab.textContent = ""; return; }
+  const stamp = d + "T" + t;
+  let extra = "";
+  if (info && info.booked && info.date === d) extra = " · already booked";
+  else if (stamp <= nowStampET()) extra = " · passed";
+  lab.textContent = d + "  " + t + " ET" + extra;
+}
+function bindSlotRow(row, info){
   const timeEl = row.querySelector("[data-slot]");
   const dateEl = row.querySelector("[data-date]");
-  const sync = () => {
-    const t = timeEl.value;
-    if (!t) return;
-    dateEl.value = nextDateForTime(t);
-  };
-  timeEl.addEventListener("change", sync);
-  timeEl.addEventListener("input", sync);
-  dateEl.addEventListener("change", () => {
-    const t = timeEl.value;
-    if (!t || !dateEl.value) return;
-    if ((dateEl.value + "T" + t) <= nowStampET()) dateEl.value = nextDateForTime(t);
+  timeEl.addEventListener("change", () => {
+    if (!timeEl.value) return;
+    dateEl.value = nextDateForTime(timeEl.value);
+    paintRowLabel(row, null);
   });
+  timeEl.addEventListener("input", () => {
+    if (!timeEl.value) return;
+    dateEl.value = nextDateForTime(timeEl.value);
+    paintRowLabel(row, null);
+  });
+  dateEl.addEventListener("change", () => paintRowLabel(row, null));
 }
 function renderSlots(slots, nextMap){
   const box = document.getElementById("slots");
@@ -490,16 +501,17 @@ function renderSlots(slots, nextMap){
   const list = (slots && slots.length) ? slots : [{time:"08:30"}];
   list.forEach(s => {
     const t = (typeof s === "string") ? s : (s.time || "08:30");
-    const nxt = (nextMap && nextMap[t]) ? nextMap[t] : "";
-    const date = (typeof s === "object" && s.date) ? s.date : (nxt ? nxt.slice(0,10) : nextDateForTime(t));
+    const info = (nextMap && nextMap[t]) ? nextMap[t] : {};
+    const date = (typeof s === "object" && s.date) ? s.date : (nextDateForTime(t));
     const row = document.createElement("div");
     row.className = "slot";
     row.innerHTML = `<input type="time" value="${t}" data-slot/>
       <input type="date" value="${date}" data-date/>
-      <span style="color:#8E8674;font-size:12px;min-width:140px">${nxt ? "posts "+nxt : "next "+date+" "+t}</span>
+      <span data-lab style="color:#8E8674;font-size:12px;min-width:160px"></span>
       <button type="button" class="ghost tiny" data-del>Remove</button>`;
     row.querySelector("[data-del]").onclick = () => row.remove();
-    bindSlotRow(row);
+    bindSlotRow(row, info);
+    paintRowLabel(row, info);
     box.appendChild(row);
   });
 }
@@ -521,7 +533,7 @@ async function load(){
   document.getElementById("dot").className = "dot" + (d.enabled || creating ? "" : " off");
   document.getElementById("live_lbl").textContent = creating ? "creating now" : (d.enabled ? "automation on" : "paused");
   const ban = document.getElementById("banner");
-  const nexts = (d.next_fires || []).map(x => x.next).filter(Boolean);
+  const nexts = (d.next_fires || []).map(x => x.fire || x.next).filter(Boolean).sort();
   document.getElementById("ban_next").textContent = nexts[0] ? ("Next slot  " + nexts[0] + " ET") : "";
   if (creating) {
     ban.className = "banner busy";
@@ -542,10 +554,10 @@ async function load(){
     const el = document.getElementById("d"+i); if (el) el.checked = true;
   });
   const nextMap = {};
-  (d.next_fires || []).forEach(x => { if (x.time) nextMap[x.time] = x.next; });
+  (d.next_fires || []).forEach(x => { if (x.time) nextMap[x.time] = x; });
   const slotObjs = (d.slots||[]).map(s => ({
     time: s.time,
-    date: s.date || (nextMap[s.time] ? nextMap[s.time].slice(0,10) : "")
+    date: s.date || ""
   })).filter(s => s.time);
   renderSlots(slotObjs.length ? slotObjs : [{time: d.post_time || "08:30"}], nextMap);
   document.getElementById("mix_news").value = (d.mix||{}).news ?? 40;
