@@ -1,0 +1,56 @@
+# Sole automatic publisher. Mac launchd is off.
+# Secrets: Settings → Secrets → Actions (LATE_API_KEY, XAI_API_KEY).
+# Late still publishes at the Eastern slot after this job ends.
+name: EagleEye social
+
+on:
+  schedule:
+    # 5:00 AM Eastern (EDT). Schedules today's remaining slots into Late.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: "auto, news, or community"
+        required: false
+        default: "auto"
+        type: choice
+        options: [auto, news, community]
+      when:
+        description: 'Eastern "YYYY-MM-DD HH:MM" (empty = remaining today)'
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: automation
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Restore rotation state
+        uses: actions/cache@v4
+        with:
+          path: automation/state
+          key: eagleeye-state-${{ github.run_id }}
+          restore-keys: |
+            eagleeye-state-
+      - name: Run → Late
+        env:
+          LATE_API_KEY: ${{ secrets.LATE_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          REPORT_EMAIL: eagleeyegolfapp@gmail.com
+          KIND: ${{ github.event.inputs.kind || 'auto' }}
+          WHEN: ${{ github.event.inputs.when || '' }}
+          LIVE: "true"
+          TZ: America/New_York
+        run: python3 run_daily.py --live

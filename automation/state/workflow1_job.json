@@ -1,0 +1,52 @@
+{
+  "kind": "golf-world",
+  "when": "2026-09-02 18:20",
+  "tz": "America/New_York",
+  "story": {
+    "id": "2026-08-30-tour-championship-scheffler",
+    "headline": "Scottie Scheffler wins TOUR Championship, second FedExCup",
+    "who": "Scottie Scheffler",
+    "event": "TOUR Championship",
+    "course": "East Lake",
+    "when": "2026-08-30",
+    "facts": {
+      "sunday_score": "66",
+      "to_par": "-16",
+      "margin": "3",
+      "runner_up": "Viktor Hovland",
+      "fedex_cups": "2",
+      "career_wins": "22",
+      "started_sunday": "3 back"
+    },
+    "article_url": "https://www.pgatour.com/article/news/daily-wrapup/2026/08/30/round-4-tour-championship-east-lake-golf-club-leaderboard-scores-results-storylines",
+    "video_url": "https://www.youtube.com/watch?v=U3misH4gzvM",
+    "video_title": "Scottie Scheffler's SENSATIONAL Sunday to win FedExCup | Round 4 | TOUR Championship | 2026",
+    "video_channel": "PGA TOUR",
+    "still_url": "https://raw.githubusercontent.com/TheSgambini/eagleeyelabsllc/main/_late-media/test-golf-world-first-tee.jpg",
+    "must_contain": [
+      "Scheffler",
+      "FedExCup",
+      "East Lake"
+    ],
+    "researched_at": "2026-09-01T18:18:49-04:00",
+    "article_status": 200,
+    "article_ok": true,
+    "video_ok": true,
+    "still_ok": true
+  },
+  "copy": {
+    "twitter": "Three back at East Lake. Sunday 66. Second FedEx Cup. Scottie didn't get hot. He got even.\n\nhttps://www.youtube.com/watch?v=U3misH4gzvM",
+    "instagram": "Three back at East Lake. Sunday 66. Second FedEx Cup. Scottie didn't get hot. He got even.",
+    "reddit": "Three back at East Lake. Sunday 66. Second FedEx Cup. Scottie didn't get hot. He got even.\n\nOfficial round: https://www.youtube.com/watch?v=U3misH4gzvM",
+    "instagram_first_comment": "Watch the official round: https://www.youtube.com/watch?v=U3misH4gzvM\n\nPGA TOUR recap: https://www.pgatour.com/article/news/daily-wrapup/2026/08/30/round-4-tour-championship-east-lake-golf-club-leaderboard-scores-results-storylines",
+    "title": "Three back. Sunday 66. Second FedEx Cup.",
+    "twitter_chars": 115
+  },
+  "legal": {
+    "do_not_download_broadcast": true,
+    "x": "text + official YouTube URL (link card), original still attached",
+    "instagram": "original still + first comment = official watch/read links",
+    "reddit": "profile u_eagleeyegolfapp, official URL in body"
+  },
+  "csv": "/Users/sgambini/Library/Mobile Documents/com~apple~CloudDocs/EagleEye Marketing 2.0/automation/out/workflow1_one_post.csv"
+}

@@ -1,0 +1,23 @@
+{
+  "timezone": "America/New_York",
+  "platforms_stills": ["twitter", "instagram", "reddit"],
+  "platforms_text": ["twitter", "reddit"],
+  "reddit_subreddit": "u_eagleeyegolfapp",
+  "app_store_url": "https://apps.apple.com/app/id6793305657",
+  "cadence": [
+    {"weekday": 0, "time": "09:30", "kind": "golf-world"},
+    {"weekday": 1, "time": "09:30", "kind": "eagleeye"},
+    {"weekday": 2, "time": "09:30", "kind": "text"},
+    {"weekday": 3, "time": "09:30", "kind": "golf-world"},
+    {"weekday": 4, "time": "09:30", "kind": "eagleeye"},
+    {"weekday": 5, "time": "09:30", "kind": "golf-world"},
+    {"weekday": 6, "time": "09:30", "kind": "eagleeye"}
+  ],
+  "never_two_product_in_a_row": true,
+  "x_max_chars": 280,
+  "banks": {
+    "eagleeye": "../stills_100.csv",
+    "golf-world": "../golf_world_stills.csv",
+    "text": "../text_only.csv"
+  }
+}

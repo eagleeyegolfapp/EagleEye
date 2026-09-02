@@ -1,0 +1,1081 @@
+{
+  "enabled": true,
+  "timezone": "America/New_York",
+  "report_email": "eagleeyegolfapp@gmail.com",
+  "platforms_stills": [
+    "twitter",
+    "instagram",
+    "reddit"
+  ],
+  "reddit_subreddit": "u_eagleeyegolfapp",
+  "reddit_weekly": true,
+  "reddit_subs": [
+    "golfcirclejerk",
+    "WeekendGolfers",
+    "golfswing",
+    "PGA_Tour",
+    "livgolf",
+    "GolfTravel",
+    "golf"
+  ],
+  "app_store_url": "https://apps.apple.com/app/id6793305657",
+  "post_time": "08:30",
+  "slots": [
+    {
+      "time": "08:30"
+    },
+    {
+      "time": "12:15"
+    },
+    {
+      "time": "17:45"
+    },
+    {
+      "time": "19:52"
+    },
+    {
+      "time": "06:00"
+    }
+  ],
+  "days": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "mix": {
+    "news": 40,
+    "community": 60,
+    "eagleeye": 0
+  },
+  "media": {
+    "require_image": true,
+    "prefer_short_video": false,
+    "ai_video": false,
+    "prefer_official_video_link": true,
+    "generate_still": true
+  },
+  "x_max_chars": 280,
+  "community_channels": [
+    {
+      "name": "Rick Shiels Golf",
+      "youtube_id": "UCFHZHhZaH7Rc_FOMIzUziJA",
+      "weight": 10,
+      "x_handle": "RickShielsPGA",
+      "ig_handle": "RickShielsPGA"
+    },
+    {
+      "name": "Good Good",
+      "youtube_id": "UCfi-mPMOmche6WI-jkvnGXw",
+      "weight": 10,
+      "x_handle": "GoodGoodGolf",
+      "ig_handle": "GoodGoodGolf"
+    },
+    {
+      "name": "Grant Horvat Golf",
+      "youtube_id": "UCgUueMmSpcl-aCTt5CuCKQw",
+      "weight": 10,
+      "x_handle": "GrantHorvat",
+      "ig_handle": "GrantHorvat"
+    },
+    {
+      "name": "Bob Does Sports",
+      "youtube_id": "UCqr4sONkmFEOPc3rfoVLEvg",
+      "weight": 10,
+      "x_handle": "BobDoesSports",
+      "ig_handle": "BobDoesSports"
+    },
+    {
+      "name": "gm__golf",
+      "youtube_id": "UClljAz6ZKy0XeViKsohdjqA",
+      "weight": 10
+    },
+    {
+      "name": "No Laying Up",
+      "youtube_id": "UCZn1UAWT9W0pLTWCdt8CTBg",
+      "weight": 7,
+      "x_handle": "NoLayingUp",
+      "ig_handle": "NoLayingUp"
+    },
+    {
+      "name": "Bryson DeChambeau",
+      "youtube_id": "UCCxF55adGXOscJ3L8qdKnrQ",
+      "weight": 10,
+      "x_handle": "b_dechambeau",
+      "ig_handle": "b_dechambeau"
+    },
+    {
+      "name": "Bryan Bros Golf",
+      "youtube_id": "UCdCxaD8rWfAj12rloIYS6jQ",
+      "weight": 7,
+      "x_handle": "BryanBrosGolf",
+      "ig_handle": "BryanBrosGolf"
+    },
+    {
+      "name": "Danny Maude",
+      "youtube_id": "UCQb15iVbplme18QP-nuyWng",
+      "weight": 7,
+      "x_handle": "DannyMaude",
+      "ig_handle": "DannyMaude"
+    },
+    {
+      "name": "Peter Finch Golf",
+      "youtube_id": "UCFoez1Xjc90CsHvCzqKnLcw",
+      "weight": 7,
+      "x_handle": "PeterFinchGolf",
+      "ig_handle": "PeterFinchGolf"
+    },
+    {
+      "name": "TaylorMade Golf",
+      "youtube_id": "UClJO9jvaU5mvNuP-XTbhHGw",
+      "weight": 7,
+      "x_handle": "TaylorMadeGolf",
+      "ig_handle": "TaylorMadeGolf"
+    },
+    {
+      "name": "Titleist",
+      "youtube_id": "UCyy8ULLDGSm16_EkXdIt4Gw",
+      "weight": 7,
+      "x_handle": "Titleist",
+      "ig_handle": "Titleist"
+    },
+    {
+      "name": "Callaway Golf",
+      "youtube_id": "UCDifOmdDEDNZkV0eZl2soQg",
+      "weight": 7,
+      "x_handle": "CallawayGolf",
+      "ig_handle": "CallawayGolf"
+    },
+    {
+      "name": "Golf Digest",
+      "youtube_id": "UCkMOtD7MMYs1H55XH6CkWEw",
+      "weight": 7,
+      "x_handle": "GolfDigest",
+      "ig_handle": "GolfDigest"
+    },
+    {
+      "name": "Golf Channel",
+      "youtube_id": "UC5igJFdBQVqg7hXFI7075OQ",
+      "weight": 7,
+      "x_handle": "GolfChannel",
+      "ig_handle": "GolfChannel"
+    },
+    {
+      "name": "Micah Morris",
+      "youtube_id": "UCfdYeBYjouhibG64ep_m4Vw",
+      "weight": 3
+    },
+    {
+      "name": "Luke Kwon Golf",
+      "youtube_id": "UCJcc1x6emfrQquiV8Oe_pug",
+      "weight": 3
+    },
+    {
+      "name": "Brad Dalke",
+      "youtube_id": "UCjchle1bmH0acutqK15_XSA",
+      "weight": 3
+    },
+    {
+      "name": "Busta Jack",
+      "youtube_id": "UC1vU6fxc93lRAA0Lso6iIzw",
+      "weight": 3
+    },
+    {
+      "name": "MrShortGame Golf",
+      "youtube_id": "UCuXIBwKQeH9cnLOv7w66cJg",
+      "weight": 3
+    },
+    {
+      "name": "ChrisRyanGolf",
+      "youtube_id": "UCKo7Y45mcjDtLKiCx6ZTvAg",
+      "weight": 3
+    },
+    {
+      "name": "Golf with Aimee",
+      "youtube_id": "UCKby5Cq9jArperhkdbX1X6g",
+      "weight": 3
+    },
+    {
+      "name": "Scratch Golf Academy",
+      "youtube_id": "UC79FyJ_choPudvaY5Tx_TvA",
+      "weight": 3
+    },
+    {
+      "name": "Top Speed Golf",
+      "youtube_id": "UC_iddZiEUKR0Byb_eHbHHAQ",
+      "weight": 3
+    },
+    {
+      "name": "Athletic Motion Golf",
+      "youtube_id": "UCvtpTGbGiMgI8gWlsMUmdLA",
+      "weight": 3
+    },
+    {
+      "name": "Hammy Golf",
+      "youtube_id": "UCpOVVnDJ6RMxf6Esv08bynw",
+      "weight": 3
+    },
+    {
+      "name": "Golf Mates",
+      "youtube_id": "UCoIW9lB_DU6Uh7YplZgxgng",
+      "weight": 3
+    },
+    {
+      "name": "Taco Golf",
+      "youtube_id": "UCpMl4nfWUiYKdq8Il8ZICPQ",
+      "weight": 3
+    },
+    {
+      "name": "Jake Hutt Golf",
+      "youtube_id": "UCDKeyElmIAbwtsYgNWekOiw",
+      "weight": 3
+    },
+    {
+      "name": "Good Good Girls",
+      "youtube_id": "UCDVWBNM5HpSvo_wR4GeVvug",
+      "weight": 10,
+      "x_handle": "GoodGoodGolf",
+      "ig_handle": "GoodGoodGolf"
+    },
+    {
+      "name": "Good Good Pros",
+      "youtube_id": "UC2kHinOLqebNyh78zXpSCBg",
+      "weight": 10,
+      "x_handle": "GoodGoodGolf",
+      "ig_handle": "GoodGoodGolf"
+    },
+    {
+      "name": "COBRA Golf",
+      "youtube_id": "UCFNzdmF8KDIrs8MTGa_MAEQ",
+      "weight": 5,
+      "x_handle": "CobraGolf",
+      "ig_handle": "CobraGolf"
+    },
+    {
+      "name": "PING",
+      "youtube_id": "UCqDbbKM_yE8NR2fk3CFUi2g",
+      "weight": 5,
+      "x_handle": "PingTour",
+      "ig_handle": "PingTour"
+    },
+    {
+      "name": "Sunday Golf",
+      "youtube_id": "UClKkhOR3VPQBwWNnSCFtHLg",
+      "weight": 3
+    },
+    {
+      "name": "bigwedge",
+      "youtube_id": "UCEElF3RkIqUy5QJtsCYf0lw",
+      "weight": 3
+    },
+    {
+      "name": "Break50",
+      "youtube_id": "UC5dNSh3qMgv1qdmgI2VWuaw",
+      "weight": 3
+    },
+    {
+      "name": "Paige Spiranac",
+      "youtube_id": "UC9iCL5yoIZmeJkdwb5htV5Q",
+      "weight": 3
+    },
+    {
+      "name": "Stephen Castaneda",
+      "youtube_id": "UCf-wsRnfHtBATlUu6oxcyVw",
+      "weight": 3
+    },
+    {
+      "name": "Matt Scharff",
+      "youtube_id": "UCY0E4ica6wu4I8kXXyouB6w",
+      "weight": 3
+    },
+    {
+      "name": "Bubbie Golf",
+      "youtube_id": "UCEPfvFFuCdO_8HND67WcThA",
+      "weight": 3
+    },
+    {
+      "name": "Max Putnam",
+      "youtube_id": "UCR9wrwKcBKuSIZawhhCNmJA",
+      "weight": 3
+    },
+    {
+      "name": "Colin Ross Vlogs",
+      "youtube_id": "UCJB91ZhAn-T9ZbZyyZSjreA",
+      "weight": 3
+    },
+    {
+      "name": "Sean Walsh",
+      "youtube_id": "UCJQ8nHab_mmrvqSbydKBMNg",
+      "weight": 3
+    },
+    {
+      "name": "Porzak Golf",
+      "youtube_id": "UCsdU6wpjCe-s-8NR75aTnMQ",
+      "weight": 3
+    },
+    {
+      "name": "SagutoGolf",
+      "youtube_id": "UC62Ygv4OmSNZBFkL6A7KDQg",
+      "weight": 3
+    },
+    {
+      "name": "The Rick Shiels Golf Show",
+      "youtube_id": "UCZNEuuyLZQt5H9lUqImc0CQ",
+      "weight": 10,
+      "x_handle": "RickShielsPGA",
+      "ig_handle": "RickShielsPGA"
+    },
+    {
+      "name": "Fore Play Golf",
+      "youtube_id": "UCw3LGiL_bYbWrgpQ7w7QZrw",
+      "weight": 7,
+      "x_handle": "ForePlay",
+      "ig_handle": "ForePlay"
+    },
+    {
+      "name": "Wesley Bryan",
+      "youtube_id": "UCnV8-YSdhrs1r7z3VCRMrCw",
+      "weight": 3
+    },
+    {
+      "name": "George Bryan",
+      "youtube_id": "UCUYqm_eXEkz_jAS09brBaaw",
+      "weight": 3
+    },
+    {
+      "name": "Club Champion",
+      "youtube_id": "UCDdF3VYuCTZ9HuEnkGdPkCQ",
+      "weight": 3
+    },
+    {
+      "name": "Golf Sidekick",
+      "youtube_id": "UCaeGjmOiTxekbGUDPKhoU-A",
+      "weight": 7
+    },
+    {
+      "name": "Fried Egg Golf",
+      "youtube_id": "UCc5JXe0hSVA-VOh0x5qkXag",
+      "weight": 7
+    },
+    {
+      "name": "Golf Monthly",
+      "youtube_id": "UCHs_XdW23ArpXSfYUiscoRA",
+      "weight": 5
+    },
+    {
+      "name": "Today's Golfer",
+      "youtube_id": "UC_cG5BDdc3JPE5bVB_nRFVA",
+      "weight": 3
+    },
+    {
+      "name": "2nd Swing Golf",
+      "youtube_id": "UCfEf6pKXh1_hppQUmyG6_xA",
+      "weight": 3
+    },
+    {
+      "name": "2ndswinggolf",
+      "youtube_id": "UCQ27VitfI7fTVgN_DaatV2A",
+      "weight": 3
+    },
+    {
+      "name": "Trackman",
+      "youtube_id": "UCoLFCXQEusbOupxCEG5nGxg",
+      "weight": 5
+    },
+    {
+      "name": "Full Swing Golf",
+      "youtube_id": "UCikdurLdZIJXxrUN7x-B8YA",
+      "weight": 3
+    },
+    {
+      "name": "Good Good Mini Golf",
+      "youtube_id": "UCtexoW8u9tdb4xYebZm0EsQ",
+      "weight": 3,
+      "x_handle": "GoodGoodGolf",
+      "ig_handle": "GoodGoodGolf"
+    },
+    {
+      "name": "TGL",
+      "youtube_id": "UCgk93lGsVvGQrcQ-GHvh9uw",
+      "weight": 7
+    },
+    {
+      "name": "Dude Perfect",
+      "youtube_id": "UCRijo3ddMTht_IHyNSNXpNQ",
+      "weight": 10
+    },
+    {
+      "name": "NoPuttsGiven",
+      "youtube_id": "UCuaauPJmw-2Z7yjmgfV7AXw",
+      "weight": 3
+    },
+    {
+      "name": "L.A.B. Golf",
+      "youtube_id": "UC4l4f1gICnbTF_5NGoUDFtA",
+      "weight": 3
+    },
+    {
+      "name": "Scotty Cameron Putters",
+      "youtube_id": "UC3bGF5M6Pk9Vi26wUH0qUbA",
+      "weight": 5
+    },
+    {
+      "name": "SuperStroke Golf",
+      "youtube_id": "UCjhzUql9CeK5RQj_WUlrJIA",
+      "weight": 3
+    },
+    {
+      "name": "Bettinardi Golf",
+      "youtube_id": "UC1FhNcficyyEvBtpALqiPGQ",
+      "weight": 5
+    },
+    {
+      "name": "PXG",
+      "youtube_id": "UCWesyp7FA5eN4GABf3yHHBw",
+      "weight": 5
+    },
+    {
+      "name": "clevelandgolf",
+      "youtube_id": "UC04CFXbLnqBcg7ZALd-Jq_w",
+      "weight": 3
+    },
+    {
+      "name": "XXIOUSA",
+      "youtube_id": "UC5iVJ7BZ6wa1cEkHJ6ViI6g",
+      "weight": 3
+    },
+    {
+      "name": "Wilson Golf",
+      "youtube_id": "UCVfsKbGIdm8NDTF2QW7VaHA",
+      "weight": 5
+    },
+    {
+      "name": "Odyssey Golf",
+      "youtube_id": "UCKRbpyvGc2pkg7jn8sMrKIQ",
+      "weight": 5
+    },
+    {
+      "name": "MacGregorGolf",
+      "youtube_id": "UCzw2tTPEuEeFv3vmyq7f1_w",
+      "weight": 3
+    },
+    {
+      "name": "Stitch Golf",
+      "youtube_id": "UCaGuKen-ZqJe4dXkuKLGoLw",
+      "weight": 3
+    },
+    {
+      "name": "Golf.com",
+      "youtube_id": "UCzdMqRWzdF0JUJRIVa-dgDw",
+      "weight": 5,
+      "x_handle": "golf_com",
+      "ig_handle": "golf_com"
+    },
+    {
+      "name": "GmGolfClips",
+      "youtube_id": "UCFF2AaWTvEsYSHrdD70TzBA",
+      "weight": 3
+    },
+    {
+      "name": "The Golf Podcast",
+      "youtube_id": "UCjMX0blFc3tIUiMk3Sy81Fw",
+      "weight": 3
+    },
+    {
+      "name": "TALKING GOLF",
+      "youtube_id": "UCd8p6guGx03iwnoTpBMTKuQ",
+      "weight": 3
+    },
+    {
+      "name": "RotarySwing.com Golf Instruction",
+      "youtube_id": "UCrv92yiaIQQJr6D786s3taw",
+      "weight": 5
+    },
+    {
+      "name": "Big Wedge Golf",
+      "youtube_id": "UCUOqlmPAo8h4pVQ4cuRECUg",
+      "weight": 3
+    },
+    {
+      "name": "Random Golf Channel",
+      "youtube_id": "UClGNVZ2J2t2o1LDdnkwyaGw",
+      "weight": 7,
+      "x_handle": "GolfChannel",
+      "ig_handle": "GolfChannel"
+    },
+    {
+      "name": "BustaJack Golf",
+      "youtube_id": "UCWlDdrhJCiJaGpkQgwa0A7A",
+      "weight": 3
+    },
+    {
+      "name": "GolfNow",
+      "youtube_id": "UCnO78l2kqBEyN0AaH-QeLmg",
+      "weight": 3
+    },
+    {
+      "name": "Arccos Golf",
+      "youtube_id": "UCziHQWbj82dSIilxMsb1utQ",
+      "weight": 3
+    },
+    {
+      "name": "Shot Scope",
+      "youtube_id": "UC8BoaUzk_oo_Ujmp-uxg8PQ",
+      "weight": 3
+    },
+    {
+      "name": "Bushnell Golf",
+      "youtube_id": "UCY6F_zF-zloprXeahcqOCvA",
+      "weight": 3
+    },
+    {
+      "name": "SuperSpeed Golf",
+      "youtube_id": "UCX_JX3Vy6RK5t4VTfGWItfw",
+      "weight": 3
+    },
+    {
+      "name": "Tour Striker Golf",
+      "youtube_id": "UC7-BdprdxGWUU0oaUPVa00Q",
+      "weight": 3
+    },
+    {
+      "name": "Orange Whip Golf",
+      "youtube_id": "UC56AvxEMttFyt7A2CCmlldw",
+      "weight": 3
+    },
+    {
+      "name": "AnnikaSorenstam",
+      "youtube_id": "UCxO4FZZjH2B-kU_7sXc5W2A",
+      "weight": 7
+    },
+    {
+      "name": "Justin Thomas",
+      "youtube_id": "UCcaa-naI_-RsYzjN1hwMaJg",
+      "weight": 7,
+      "x_handle": "JustinThomas34",
+      "ig_handle": "JustinThomas34"
+    },
+    {
+      "name": "Jordan Spieth",
+      "youtube_id": "UCdW-_C2lI-yFScpYpmoS7nw",
+      "weight": 7,
+      "x_handle": "JordanSpieth",
+      "ig_handle": "JordanSpieth"
+    },
+    {
+      "name": "Min Woo Lee",
+      "youtube_id": "UCdQzqhXxv7MSgtYwNbXjsFw",
+      "weight": 7
+    },
+    {
+      "name": "Tiger Woods",
+      "youtube_id": "UCe7be9Yd2SnNeiy9e5nx0iQ",
+      "weight": 10,
+      "x_handle": "TigerWoods",
+      "ig_handle": "TigerWoods"
+    },
+    {
+      "name": "Jack Nicklaus",
+      "youtube_id": "UCb6D-5Bg1vlvFv7OYbMkecA",
+      "weight": 7
+    },
+    {
+      "name": "PGA TOUR Champions",
+      "youtube_id": "UCA7NPMCfXmvsGeosBkio52Q",
+      "weight": 5,
+      "x_handle": "PGATOUR",
+      "ig_handle": "PGATOUR"
+    },
+    {
+      "name": "Korn Ferry Tour",
+      "youtube_id": "UCZoQ6VBnQGF2T3hwevWLJUA",
+      "weight": 5
+    },
+    {
+      "name": "Titleist Canada",
+      "youtube_id": "UC6C8GTu-BHNItslhYLjvprg",
+      "weight": 7,
+      "x_handle": "Titleist",
+      "ig_handle": "Titleist"
+    },
+    {
+      "name": "PingGolf",
+      "youtube_id": "UCMh3Gk66pH2Oubwuhx8kD8g",
+      "weight": 5,
+      "x_handle": "PingTour",
+      "ig_handle": "PingTour"
+    },
+    {
+      "name": "CobraPumaGolf",
+      "youtube_id": "UC4UKphVwkb3bmpIyA1NmqbA",
+      "weight": 5
+    },
+    {
+      "name": "True Spec Golf",
+      "youtube_id": "UCKVUnbR6fGPWU5cw3K48xJw",
+      "weight": 3
+    },
+    {
+      "name": "Cool Clubs",
+      "youtube_id": "UCUMIZPXl5cmWooUh18XqLHA",
+      "weight": 3
+    },
+    {
+      "name": "Golf Galaxy",
+      "youtube_id": "UCqDkm8deh-lYx_D2IBqlhZg",
+      "weight": 3
+    },
+    {
+      "name": "GlobalGolf",
+      "youtube_id": "UC8syKsDLK64HRvL49uWav1g",
+      "weight": 3
+    },
+    {
+      "name": "Rock Bottom Golf",
+      "youtube_id": "UCtcfO6qNMNIpVtPmkUaQrxg",
+      "weight": 3
+    },
+    {
+      "name": "GGGolf",
+      "youtube_id": "UCLsiLpLRfm0L9-rL3FcCoSQ",
+      "weight": 3
+    },
+    {
+      "name": "AJGA Golf",
+      "youtube_id": "UCh05Z_C05Q2N8aRYyelnGUA",
+      "weight": 5
+    },
+    {
+      "name": "College Golf Guide",
+      "youtube_id": "UC4EirQM1J5TlFNyEPZDutZQ",
+      "weight": 3
+    },
+    {
+      "name": "GolfWRX Radio",
+      "youtube_id": "UCvY3RtsgL_D3Apxr6c7o5Fw",
+      "weight": 3
+    },
+    {
+      "name": "NLU Show",
+      "youtube_id": "UCNROfMfslHpnm5DrBEQKGpg",
+      "weight": 3
+    },
+    {
+      "name": "ScratchCast",
+      "youtube_id": "UCTJCCAXXzfI8_hCTDvWAkHg",
+      "weight": 3
+    },
+    {
+      "name": "Chasing Scratch Podcast",
+      "youtube_id": "UCyMh34EM2cKpZeaNVu2fkAg",
+      "weight": 3
+    },
+    {
+      "name": "Mark Crossfield",
+      "youtube_id": "UCZelGnfKLXic4gDP63dIRxw",
+      "weight": 7,
+      "x_handle": "MarkCrossfield",
+      "ig_handle": "MarkCrossfield"
+    },
+    {
+      "name": "Adam Young Golf",
+      "youtube_id": "UClb4k59S8dEDsc9cL3t7GjQ",
+      "weight": 3
+    },
+    {
+      "name": "The Golf Science Podcast",
+      "youtube_id": "UCFrqZywWGNVU8fgLPoSIR4g",
+      "weight": 3
+    },
+    {
+      "name": "Eric Cogorno Golf",
+      "youtube_id": "UClOp9ASmFYATO1zFfpB7QlA",
+      "weight": 5
+    },
+    {
+      "name": "Dan Grieve",
+      "youtube_id": "UCPsPgs75-3AhTFRYTpZ3RwQ",
+      "weight": 3
+    },
+    {
+      "name": "jamessieckmann",
+      "youtube_id": "UCCotu40V5D0wjWLWC7_9QaA",
+      "weight": 3
+    },
+    {
+      "name": "Michael Malaska",
+      "youtube_id": "UCzx-lmwhnI1bDQtLAo1swIg",
+      "weight": 5
+    },
+    {
+      "name": "Clay Ballard",
+      "youtube_id": "UCkU6tTQ4MFUOPdwbmCt1gZA",
+      "weight": 5
+    },
+    {
+      "name": "Good Good Official",
+      "youtube_id": "UCM9xs-GYJuNFls9WU7LhcbQ",
+      "weight": 10,
+      "x_handle": "GoodGoodGolf",
+      "ig_handle": "GoodGoodGolf"
+    }
+  ],
+  "news_channels": [
+    {
+      "name": "PGA TOUR",
+      "youtube_id": "UCKwGZZMrhNYKzucCtTPY2Nw",
+      "handle": "@PGATOUR",
+      "weight": 9,
+      "x_handle": "PGATOUR"
+    },
+    {
+      "name": "LPGA",
+      "youtube_id": "UCWZbPo5_riXyCFDyaMl2yRA",
+      "handle": "@LPGA",
+      "weight": 9,
+      "x_handle": "LPGA"
+    },
+    {
+      "name": "DP World Tour",
+      "youtube_id": "UCvZwbZt6YZQ4wj_7qyjPDZw",
+      "handle": "@DPWorldTour",
+      "weight": 9,
+      "x_handle": "DPWorldTour"
+    },
+    {
+      "name": "LIV Golf",
+      "youtube_id": "UCuC-Is0pVH9RudfZJw-LSmw",
+      "handle": "@LIVGolf",
+      "weight": 9,
+      "x_handle": "LIVGolf"
+    },
+    {
+      "name": "Golf Channel",
+      "youtube_id": "UC5igJFdBQVqg7hXFI7075OQ",
+      "handle": "@GolfChannel",
+      "weight": 9,
+      "x_handle": "GolfChannel"
+    },
+    {
+      "name": "Golf Digest",
+      "youtube_id": "UCkMOtD7MMYs1H55XH6CkWEw",
+      "handle": "@GolfDigest",
+      "weight": 9,
+      "x_handle": "GolfDigest"
+    },
+    {
+      "name": "PGA Championships",
+      "youtube_id": "UCnUYyAtDiyeaobSzKqVE_BA",
+      "handle": "@PGAChampionship",
+      "weight": 9,
+      "x_handle": "PGAChampionship"
+    },
+    {
+      "name": "USGA",
+      "youtube_id": "UCsZsn_S93Zs8JOdKMRbklmg",
+      "handle": "@USGA",
+      "weight": 9,
+      "x_handle": "USGA"
+    },
+    {
+      "name": "Ryder Cup",
+      "youtube_id": "UCFiswEI_awoQBRQ1JK6v0cA",
+      "handle": "@RyderCup",
+      "weight": 9,
+      "x_handle": "RyderCup"
+    },
+    {
+      "name": "Sky Sports Golf",
+      "youtube_id": "UCa98aY7eenHS_YhehF-vuEQ",
+      "handle": "@SkySportsGolf",
+      "weight": 9
+    },
+    {
+      "name": "Golf Pass",
+      "youtube_id": "UCZdCAG0YTyBuFIAYmJsqvHQ",
+      "handle": "@GolfPass",
+      "weight": 9
+    }
+  ],
+  "fallback_still": "https://raw.githubusercontent.com/TheSgambini/eagleeyelabsllc/main/_late-media/test-golf-world-first-tee.jpg",
+  "x_accounts": [
+    {
+      "name": "PGA TOUR",
+      "handle": "PGATOUR",
+      "url": "https://x.com/PGATOUR"
+    },
+    {
+      "name": "LPGA",
+      "handle": "LPGA",
+      "url": "https://x.com/LPGA"
+    },
+    {
+      "name": "DP World Tour",
+      "handle": "DPWorldTour",
+      "url": "https://x.com/DPWorldTour"
+    },
+    {
+      "name": "LIV Golf",
+      "handle": "LIVGolf",
+      "url": "https://x.com/LIVGolf"
+    },
+    {
+      "name": "Golf Channel",
+      "handle": "GolfChannel",
+      "url": "https://x.com/GolfChannel"
+    },
+    {
+      "name": "Golf Digest",
+      "handle": "GolfDigest",
+      "url": "https://x.com/GolfDigest"
+    },
+    {
+      "name": "Golf.com",
+      "handle": "golf_com",
+      "url": "https://x.com/golf_com"
+    },
+    {
+      "name": "No Laying Up",
+      "handle": "NoLayingUp",
+      "url": "https://x.com/NoLayingUp"
+    },
+    {
+      "name": "The Fried Egg",
+      "handle": "TheFriedEgg",
+      "url": "https://x.com/TheFriedEgg"
+    },
+    {
+      "name": "MyGolfSpy",
+      "handle": "MyGolfSpy",
+      "url": "https://x.com/MyGolfSpy"
+    },
+    {
+      "name": "Rick Shiels",
+      "handle": "RickShielsPGA",
+      "url": "https://x.com/RickShielsPGA"
+    },
+    {
+      "name": "Good Good",
+      "handle": "GoodGoodGolf",
+      "url": "https://x.com/GoodGoodGolf"
+    },
+    {
+      "name": "Grant Horvat",
+      "handle": "GrantHorvat",
+      "url": "https://x.com/GrantHorvat"
+    },
+    {
+      "name": "Bob Does Sports",
+      "handle": "BobDoesSports",
+      "url": "https://x.com/BobDoesSports"
+    },
+    {
+      "name": "Bryson DeChambeau",
+      "handle": "b_dechambeau",
+      "url": "https://x.com/b_dechambeau"
+    },
+    {
+      "name": "Bryan Bros",
+      "handle": "BryanBrosGolf",
+      "url": "https://x.com/BryanBrosGolf"
+    },
+    {
+      "name": "Fore Play",
+      "handle": "ForePlay",
+      "url": "https://x.com/ForePlay"
+    },
+    {
+      "name": "Barstool Sports",
+      "handle": "barstoolsports",
+      "url": "https://x.com/barstoolsports"
+    },
+    {
+      "name": "Titleist",
+      "handle": "Titleist",
+      "url": "https://x.com/Titleist"
+    },
+    {
+      "name": "TaylorMade",
+      "handle": "TaylorMadeGolf",
+      "url": "https://x.com/TaylorMadeGolf"
+    },
+    {
+      "name": "Callaway",
+      "handle": "CallawayGolf",
+      "url": "https://x.com/CallawayGolf"
+    },
+    {
+      "name": "Ping",
+      "handle": "PingTour",
+      "url": "https://x.com/PingTour"
+    },
+    {
+      "name": "Cobra Golf",
+      "handle": "CobraGolf",
+      "url": "https://x.com/CobraGolf"
+    },
+    {
+      "name": "USGA",
+      "handle": "USGA",
+      "url": "https://x.com/USGA"
+    },
+    {
+      "name": "The Open",
+      "handle": "TheOpen",
+      "url": "https://x.com/TheOpen"
+    },
+    {
+      "name": "PGA Championship",
+      "handle": "PGAChampionship",
+      "url": "https://x.com/PGAChampionship"
+    },
+    {
+      "name": "Ryder Cup",
+      "handle": "RyderCup",
+      "url": "https://x.com/RyderCup"
+    },
+    {
+      "name": "Presidents Cup",
+      "handle": "PresidentsCup",
+      "url": "https://x.com/PresidentsCup"
+    },
+    {
+      "name": "TGL",
+      "handle": "tgl",
+      "url": "https://x.com/tgl"
+    },
+    {
+      "name": "Masters",
+      "handle": "TheMasters",
+      "url": "https://x.com/TheMasters"
+    },
+    {
+      "name": "Scottie Scheffler",
+      "handle": "ScottieScheffler",
+      "url": "https://x.com/ScottieScheffler"
+    },
+    {
+      "name": "Rory McIlroy",
+      "handle": "McIlroyRory",
+      "url": "https://x.com/McIlroyRory"
+    },
+    {
+      "name": "Nelly Korda",
+      "handle": "nellykorda",
+      "url": "https://x.com/nellykorda"
+    },
+    {
+      "name": "Justin Thomas",
+      "handle": "JustinThomas34",
+      "url": "https://x.com/JustinThomas34"
+    },
+    {
+      "name": "Jordan Spieth",
+      "handle": "JordanSpieth",
+      "url": "https://x.com/JordanSpieth"
+    },
+    {
+      "name": "Tiger Woods",
+      "handle": "TigerWoods",
+      "url": "https://x.com/TigerWoods"
+    },
+    {
+      "name": "Me and My Golf",
+      "handle": "meandmygolf",
+      "url": "https://x.com/meandmygolf"
+    },
+    {
+      "name": "Mark Crossfield",
+      "handle": "MarkCrossfield",
+      "url": "https://x.com/MarkCrossfield"
+    },
+    {
+      "name": "Peter Finch",
+      "handle": "PeterFinchGolf",
+      "url": "https://x.com/PeterFinchGolf"
+    },
+    {
+      "name": "Danny Maude",
+      "handle": "DannyMaude",
+      "url": "https://x.com/DannyMaude"
+    }
+  ],
+  "news_feeds": [
+    {
+      "name": "Golf.com",
+      "url": "https://golf.com/feed/"
+    },
+    {
+      "name": "BBC Sport Golf",
+      "url": "https://feeds.bbci.co.uk/sport/golf/rss.xml"
+    },
+    {
+      "name": "GolfWRX",
+      "url": "https://www.golfwrx.com/feed/"
+    },
+    {
+      "name": "MyGolfSpy",
+      "url": "https://www.mygolfspy.com/feed/"
+    },
+    {
+      "name": "bunkered",
+      "url": "https://www.bunkered.co.uk/feed/"
+    },
+    {
+      "name": "Australian Golf Digest",
+      "url": "https://www.australiangolfdigest.com.au/feed/"
+    }
+  ],
+  "ends_on": "2026-10-31",
+  "max_posts_per_run": 5,
+  "max_runtime_sec": 720,
+  "max_failures_per_run": 2,
+  "events": [
+    {
+      "name": "Presidents Cup",
+      "start": "2026-09-15",
+      "end": "2026-09-28",
+      "lead_days": 20,
+      "boost": 10,
+      "keywords": [
+        "Presidents Cup",
+        "Medinah"
+      ]
+    },
+    {
+      "name": "FedEx Cup Fall",
+      "start": "2026-09-15",
+      "end": "2026-10-20",
+      "lead_days": 7,
+      "boost": 6,
+      "keywords": [
+        "FedEx Cup Fall",
+        "Biltmore",
+        "Playoffs"
+      ]
+    },
+    {
+      "name": "Solheim Cup",
+      "start": "2026-09-11",
+      "end": "2026-09-14",
+      "lead_days": 14,
+      "boost": 8,
+      "keywords": [
+        "Solheim Cup"
+      ]
+    },
+    {
+      "name": "TGL",
+      "start": "2027-01-05",
+      "end": "2027-03-31",
+      "lead_days": 21,
+      "boost": 5,
+      "keywords": [
+        "TGL"
+      ]
+    }
+  ]
+}

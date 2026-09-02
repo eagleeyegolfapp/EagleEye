@@ -1,0 +1,190 @@
+TWO MACHINES — how this actually runs
+=====================================
+
+You described two jobs. They stay separate on purpose.
+
+  MACHINE A  Golf world  (news, every morning)
+  MACHINE B  EagleEye ads (real UI screenshots + captions)
+
+Late is the publisher for both. Grok is the brain. You do follows/DMs by hand.
+
+---------------------------------------------------------------------------
+THE HARD LIMIT (read this before the cute Scottie example)
+---------------------------------------------------------------------------
+
+You cannot download a Golf Channel / PGA TOUR interview or a collage of
+broadcast "incredible shots" and re-upload that file to Instagram, X, or
+Reddit as EagleEye's post. That footage is copyrighted. IG/YouTube Content
+ID will strike it; it is also illegal for a commercial account.
+
+What the Scottie example becomes, automatically and legally:
+
+  X:      Quote-tweet PGA TOUR / Scheffler's own post, OR link the official
+          YouTube interview with YOUR caption on top.
+  Reddit: Link post to the official article or YouTube. Your title/caption.
+  IG:     You do NOT upload their video. You post an original still
+          (your photo, or a news-safe still) + a caption about the win,
+          and put the official watch-link in the first comment.
+          If there is no rights-safe still, skip Instagram that morning.
+
+"Find the video" = discover the official URL and package a post around it.
+It does not mean rip the file.
+
+If you later buy a license (Getty stills, PGA TOUR content deal), Machine A
+can switch from "link the official clip" to "upload the licensed file."
+Until then, link/quote.
+
+---------------------------------------------------------------------------
+MACHINE A — Golf world, 6:00am every day
+---------------------------------------------------------------------------
+
+Trigger: Mac launchd at 06:00 America/New_York
+         (or a Grok scheduled task that writes a job file the Mac picks up)
+
+Step 1  RESEARCH
+  Grok + live web search against:
+    - pgatour.com / espn.com/golf / golfdigest.com / apnews.com golf
+    - Official X: PGA TOUR, LPGA, players
+  Output: 1–3 factual stories (who, what, where, source URL).
+  Rules: no invented scores, no fake quotes, no "EagleEye official."
+  If golf is quiet: fall back to an evergreen row in golf_world_stills.csv.
+
+Step 2  FIND MEDIA (not steal media)
+  YouTube Data API  — search official channels (PGA TOUR, Golf Channel,
+                      player channels) for the story. Save video URL +
+                      official title + thumbnail URL.
+  X search          — find the originating tweet to quote.
+  Never ffmpeg-download a broadcast and re-encode it.
+
+Step 3  WRITE CAPTION
+  Grok, golfer-to-golfer voice (same as text_only.csv).
+  Product mention: usually NONE. This slot exists so the feed is not an ad.
+  X: under 280. Reddit title + body. IG caption + first comment = source URL.
+
+Step 4  PACKAGE PER NETWORK  (this is the important part)
+
+  Story example: "Scottie Scheffler wins [event]."
+
+  X
+    type: quote of PGA TOUR tweet  OR  text + official YouTube URL
+    caption: your take, not a press release
+    Late: platform twitter
+
+  Reddit (your profile u_eagleeyegolfapp)
+    type: link post
+    url: official article or YouTube
+    title: your line
+    Late: platform reddit, reddit_subreddit=u_eagleeyegolfapp
+
+  Instagram
+    type: still (original) + first comment with the watch/read link
+    still: evergreen golf still OR a rights-safe image, never the interview file
+    if we cannot make a still that isn't stolen: skip IG that day
+
+Step 5  SCHEDULE
+  Late API POST /v1/posts
+  timezone America/New_York
+  scheduledFor today 09:30 (golf-world) or 12:15 (second slot)
+  Upload original stills via Late media presign (never jsDelivr @ URLs).
+
+Step 6  LOG
+  logs/posts.csv: date, kind=golf-world, story, source_url, late_id, platforms
+
+Accounts / keys for Machine A
+  - LATE_API_KEY + X/IG/Reddit account ids   (you have Late)
+  - XAI_API_KEY                              (Grok research + captions)
+  - YouTube Data API key (Google Cloud)      (find official videos)
+  Optional later: Getty/AP sports license    (real event photos you may upload)
+
+---------------------------------------------------------------------------
+MACHINE B — EagleEye ads, real UI only
+---------------------------------------------------------------------------
+
+Imagine cannot draw your Stats/Flyover screens. It garbles numbers and
+invents chrome. So Machine B never "generates the UI." It composites
+screenshots you already captured.
+
+Step 0  SCREENSHOT LIBRARY (you build once, then add)
+  Folder:  .../EagleEye Marketing 2.0/ui-shots/
+    flyover/   home/   leaks/   gir/   tee/   short-game/
+    live-round/  courses/  unlock/  splash/
+  Rules: real device or simulator. No mockups. Name files clearly.
+  You already have a head start in 11-social-ops/still approved/
+
+Step 1  PICK A SHOT
+  Rotation so we do not post the same leak screen every Thursday.
+  state/last_ui.json tracks last ids.
+
+Step 2  OPTIONAL FRAME (code, not AI)
+  Python/Pillow: put the screenshot on #07080A with gold #C9A227 hairlines,
+  official icon in a corner, short gold line if needed
+  ("3 rounds free. Then unlock once.").
+  Exact text stays exact because it is drawn in code.
+
+Step 3  CAPTION
+  Grok reads Foundational Document + which screen was chosen.
+  Voice: direct, Hormozi, stupid not to try.
+  Always: 3 free unlocked rounds, one-time unlock, no ads, no sub, on-device.
+  X copy includes App Store URL. IG first comment = App Store URL.
+
+Step 4  PACKAGE
+  X + Instagram + Reddit (Facebook later).
+  IG contentType=post (still). Not a Reel until we have real video.
+  Reddit: u_eagleeyegolfapp
+  Media: Late presign upload of the framed JPEG.
+
+Step 5  SCHEDULE
+  Cadence: Mon/Thu/Sat 09:30 ET (see config). Never two product days in a row
+  if the previous post was also EagleEye.
+
+---------------------------------------------------------------------------
+DAILY CLOCK
+---------------------------------------------------------------------------
+
+06:00  Machine A research + package golf-world
+09:00  launchd runs pipeline.py (posts whatever was packaged, or generates
+       the EagleEye slot if today is a product day)
+09:30  golf-world or EagleEye goes live (per weekday)
+12:15  optional second slot (text-only on X/Reddit, or extra golf-world)
+
+Weekday map (already in config.example.json)
+  Sun golf-world   Mon EagleEye   Tue text
+  Wed golf-world   Thu EagleEye   Fri golf-world   Sat EagleEye
+
+---------------------------------------------------------------------------
+WHAT YOU SET UP (checklist)
+---------------------------------------------------------------------------
+
+Already
+  [x] Late connected: X, Instagram, Reddit
+  [x] Copy banks + image briefs
+  [x] pipeline.py + launchd plist
+  [x] Two test stills + test_two_posts.csv
+
+You do next
+  [ ] Paste LATE_API_KEY into automation/.env
+  [ ] Paste the SAME key as GitHub secret LATE_API_KEY
+      (repo TheSgambini/eagleeyelabsllc → Settings → Secrets → Actions)
+      This is what runs when the Mac is off.
+  [ ] Instagram is Business
+  [ ] Say "run it" in this chat, or tap Actions → EagleEye social → Run workflow
+  [ ] xAI API key (console.x.ai) — later, for new captions
+  [ ] Copy ui-shots/ from still approved/ (sorted by screen) — Machine B
+  [ ] launchctl is optional backup only. GitHub + Late is the real clock.
+
+Do not
+  [ ] Download PGA/Golf Channel video files to re-upload
+  [ ] Ask Imagine to fake Flyover/Leaks numbers
+  [ ] Put the App Store link on every golf-world post
+
+---------------------------------------------------------------------------
+WHEN YOU WANT THE SCOTTIE VERSION WITH ACTUAL VIDEO ON IG
+---------------------------------------------------------------------------
+
+That is a licensing problem, not an AI problem. Paths:
+  1. Keep IG as still + link (ship now).
+  2. Film your own 15s (you on a range, your app, your words).
+  3. Pay for licensed clips (Getty motion / Tour content partner).
+
+Until 2 or 3 exists, Machine A posts the interview as a link/quote, not as
+your uploaded file.

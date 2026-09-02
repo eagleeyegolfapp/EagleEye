@@ -1,0 +1,47 @@
+{
+  "lanes": [
+    "news",
+    "community",
+    "news",
+    "news",
+    "community",
+    "news",
+    "news",
+    "community",
+    "news",
+    "news"
+  ],
+  "video_ids": [
+    "9Z5jTTcoaI4",
+    "UG_3kl4fP9Y",
+    "PJNJqd4gTRE",
+    "Ht08F6y8sao",
+    "U3misH4gzvM"
+  ],
+  "used_keys": [
+    "9Z5jTTcoaI4",
+    "yt-9Z5jTTcoaI4",
+    "UG_3kl4fP9Y",
+    "yt-UG_3kl4fP9Y",
+    "PJNJqd4gTRE",
+    "yt-PJNJqd4gTRE",
+    "Ht08F6y8sao",
+    "yt-Ht08F6y8sao",
+    "youtube:Ht08F6y8sao",
+    "U3misH4gzvM",
+    "yt-U3misH4gzvM",
+    "fp:presidentscupselectionspecial"
+  ],
+  "last": {
+    "lane": "news",
+    "when": "2026-09-01 19:52",
+    "headline": "Presidents Cup Selection Special",
+    "video_url": "https://www.youtube.com/watch?v=Ht08F6y8sao",
+    "still": "https://media.zernio.com/temp/1788306670554_0q25gppr_news-20260901.jpg",
+    "photo_credit": "Photo: \"U.S. Naval War College President's Cup Hockey Game\" by U.S. Naval War College is licensed under CC BY 2.0. To view a copy of this license, visit https://creativecommons.org/licenses/by/2.0/.",
+    "packaged": "official-video",
+    "copy": "PGA TOUR drops the Presidents Cup squad and the takes are already flying. Medinah's gonna be a circus. https://www.youtube.com/watch?v=Ht08F6y8sao",
+    "late_id": "6a9764f0c8ca4e03d86a1c54",
+    "status": "scheduled"
+  }
+}

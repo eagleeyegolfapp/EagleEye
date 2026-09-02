@@ -1,0 +1,183 @@
+EAGLEEYE SOCIAL AUTOMATION — START TO FINISH
+============================================
+
+What this system does, every morning, with no clicking, even if this Mac is off:
+  1. GitHub Actions wakes in the cloud (or you tap Run workflow).
+  2. Machine A researches official golf news, finds official URLs.
+  3. It POSTs a scheduled job to Late. Late is also in the cloud.
+  4. Late publishes to X + Instagram + Reddit at the Eastern time, Mac or no Mac.
+  5. You still do follows / DMs by hand.
+
+GitHub Actions is the only automatic publisher. This Mac does not auto-post
+(launchd is off). Closing the dashboard does not stop the cloud runner.
+Dashboard "Run" / Spotlight are manual overrides only.
+
+What it will NOT do (on purpose):
+  - Reply, follow, or DM. You still do that as a person.
+  - Invent fake EagleEye UI. Product stills are brand frames or real screenshots.
+  - Download PGA TOUR / Golf Channel files to re-upload.
+  - Bid fake news. If golf-world news is thin, it uses an evergreen golf still.
+
+------------------------------------------------
+A. ACCOUNTS YOU CREATE (once)
+------------------------------------------------
+
+1. Late  (already have this)
+   - https://getlate.dev  → Settings → API → create key
+   - Confirm X, Instagram (professional/business), Reddit are connected
+   - Reddit posts to your profile: u_eagleeyegolfapp
+   - Paste the key in TWO places (same string):
+       a) This Mac:
+            .../EagleEye Marketing 2.0/automation/.env
+            LATE_API_KEY=paste_here
+            XAI_API_KEY=paste_here
+       b) GitHub (Mac-off clock). Repo: eagleeyegolfapp/EagleEye
+            https://github.com/eagleeyegolfapp/EagleEye/settings/secrets/actions
+            Secrets: LATE_API_KEY, XAI_API_KEY
+            Optional email: GMAIL_USER, GMAIL_APP_PASSWORD
+            This Mac signs in as TheSgambini. Add TheSgambini as a Write
+            collaborator on eagleeyegolfapp/EagleEye so the runner can be pushed.
+   - Account IDs are pulled from Late automatically. You do not type those.
+   - Dashboard (schedule / mix / pause): double-click Open Dashboard.command
+     Default is ON. If you never open it, it keeps running as saved.
+
+2. xAI  (for fully auto image+copy later)
+   - https://console.x.ai → API key
+   - Needed when pipeline generates NEW stills without you
+   - The two TEST stills were already generated in Grok; you do not need this key to run the test CSV
+
+3. Instagram
+   - Professional → Business, category Sports
+   - Late cannot post as a personal IG
+
+4. Do NOT use jsDelivr URLs with @commit. Late encodes @ as %40 and media download 400s.
+   Pipeline uploads via Late's own media presign. Test CSV uses raw.githubusercontent.com/.../main/... (no @).
+
+------------------------------------------------
+B. FILES ON YOUR MAC
+------------------------------------------------
+
+Folder:
+  ~/Library/Mobile Documents/com~apple~CloudDocs/EagleEye Marketing 2.0/automation/
+
+  SETUP.txt                 this file
+  pipeline.py               the runner
+  config.example.json       cadence + banks
+  .env.example              keys
+  com.eagleeye.social.plist launchd (9:00am daily)
+  out/                      generated stills
+  logs/posts.csv            what shipped
+  ../stills_100.csv         EagleEye product bank
+  ../golf_world_stills.csv  golf-world bank
+  ../text_only.csv          X/Reddit text-only
+  ../SOCIAL_METHOD.txt      mix rules
+
+------------------------------------------------
+C. WIRE IT (15 minutes)
+------------------------------------------------
+
+1. Copy config:
+     cp config.example.json config.json
+
+2. Paste LATE_API_KEY into automation/.env and save.
+   Then the same key as a GitHub Actions secret named LATE_API_KEY
+   (https://github.com/TheSgambini/eagleeyelabsllc/settings/secrets/actions).
+   Account IDs are filled in automatically. You do not type those.
+
+3. Local live test (Mac on, talks to Late immediately):
+     python3 run_daily.py --live --kind golf-world --when "2026-09-02 18:20"
+
+4. Cloud (Mac can be off after this):
+     GitHub → Actions → EagleEye social → Run workflow
+     Daily cron is already in .github/workflows/eagleeye-social.yml
+
+5. Do NOT load launchd. Two clocks double-post. GitHub Actions is the clock.
+
+------------------------------------------------
+D. CADENCE THE MACHINE FOLLOWS
+------------------------------------------------
+
+Sun 09:30  golf-world still   X + IG + Reddit
+Mon 09:30  EagleEye still     X + IG + Reddit
+Tue 09:30  text-only          X + Reddit
+Wed 09:30  golf-world still
+Thu 09:30  EagleEye still
+Fri 09:30  golf-world still
+Sat 09:30  EagleEye still
+
+If the last post was EagleEye, the next product slot flips to golf-world.
+Facebook: add LATE_FACEBOOK_ACCOUNT_ID later and put "facebook" in config platforms_stills.
+
+------------------------------------------------
+E. IMAGE RULES THE PIPELINE ENFORCES
+------------------------------------------------
+
+EagleEye stills:
+  - Official icon / splash / real screenshots only.
+  - Imagine must NOT invent fake stats UI (garbled numbers).
+  - Brand stills (gold eye on black) are the auto-safe default.
+
+Golf-world stills:
+  - Photoreal golf. No famous players. No fake leaderboards.
+  - No hard sell, no App Store URL in the copy.
+
+Media host:
+  - Production = Late presign upload (pipeline.py).
+  - Test CSV = raw GitHub, branch main, no @ in the URL.
+
+------------------------------------------------
+F. TEST POSTS (already generated)
+------------------------------------------------
+
+1) EagleEye brand still
+   out/test-eagleeye-brand.jpg
+   Copy: three rounds free, unlock once, no ads, no subscription.
+   Platforms: twitter, instagram, reddit
+
+2) Golf-world first tee
+   out/test-golf-world-first-tee.jpg
+   Copy: first tee, cold hands, the whole sport in eight seconds.
+   Platforms: twitter, instagram, reddit
+   No App Store URL.
+
+Import test_two_posts.csv AFTER deleting old duplicate scheduled posts in Late.
+First row is 2026-09-02 09:30 ET.
+
+------------------------------------------------
+H. WORKFLOW 1 TEST (one golf-world news post)
+------------------------------------------------
+
+Machine A, not the product bank. Researches official PGA TOUR sources,
+does NOT re-upload Tour video, packages X + IG + Reddit.
+
+  python3 workflow_one.py --when "2026-09-02 18:20" --live
+
+One row, 84-col Late CSV (also copied to Desktop):
+  out/workflow1_one_post.csv
+  ~/Desktop/eagleeye_workflow1_one_post.csv
+
+Story: Scheffler, East Lake, Sunday 66, second FedEx Cup.
+X/Reddit: official YouTube https://www.youtube.com/watch?v=U3misH4gzvM
+IG: original first-tee still + first comment = watch/read links.
+No App Store URL on this post.
+
+Through Late without an API key:
+  Late → Bulk Schedule → import the Desktop CSV.
+  Delete any older duplicate drafts first.
+
+Through Late with an API key:
+  Put LATE_API_KEY + LATE_*_ACCOUNT_ID in automation/.env
+  then re-run the same command. It POSTs /v1/posts.
+
+Tonight 6:20 PM ET on 2026-09-01 was already past when this
+job was built. Schedule is 2026-09-02 18:20 America/New_York.
+
+------------------------------------------------
+G. AFTER THE TEST WORKS
+------------------------------------------------
+
+1. Confirm both posts published on X, IG, Reddit.
+2. Fill .env and run pipeline.py live so you never hand-import CSV again.
+3. Load launchd.
+4. Once a week: open logs/posts.csv, mark what got profile taps / App Store hits, kill themes that only get likes.
+5. Video bank later. Do not add IG Reels until we have 9:16 footage.
