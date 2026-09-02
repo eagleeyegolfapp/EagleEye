@@ -311,10 +311,8 @@ def late_payload(
         acc = mapping.get(name, "")
         if not acc:
             continue
-        # Instagram cannot play a linked YouTube/Vimeo player. It needs a photo.
-        # X and Reddit render the embed — never attach a still on top of a video.
-        if name == "instagram" and not still:
-            print("  skip IG — no rights-safe photo of the subject")
+        # Instagram is a separate Late job (mediaItems required). Skip it here.
+        if name == "instagram":
             continue
         if name == "reddit":
             profile = (cfg.get("reddit_subreddit") or "u_eagleeyegolfapp").lstrip("r/")
@@ -372,30 +370,6 @@ def late_payload(
                 print("  twitter  single")
             platforms.append(item)
             continue
-        if name == "instagram":
-            # Omit contentType for feed — Late only accepts "story" / "reels".
-            # "post" is invalid and Instagram ships with no media.
-            item["platformSpecificData"] = {
-                "firstComment": copy.get("instagram_first_comment")
-                or copy.get("ig_first_comment")
-                or "",
-            }
-            item["customMedia"] = [{"url": still, "type": "image"}]
-            platforms.append(item)
-            if flourish == "story":
-                platforms.append(
-                    {
-                        "platform": "instagram",
-                        "accountId": acc,
-                        "customContent": "",
-                        "platformSpecificData": {"contentType": "story"},
-                        "customMedia": [{"url": still, "type": "image"}],
-                    }
-                )
-                print("  instagram feed + story")
-            else:
-                print("  instagram feed")
-            continue
         platforms.append(item)
     if not platforms:
         raise SystemExit("No Late account IDs — connect X, Instagram, Reddit.")
@@ -405,15 +379,63 @@ def late_payload(
         "content": copy["reddit"],
         "title": copy["title"],
         "timezone": cfg.get("timezone", "America/New_York"),
-        "scheduledFor": when.replace(" ", "T"),
+        "scheduledFor": when.replace(" ", "T") + ("" if len(when) > 16 else ":00"),
         "publishNow": False,
         "isDraft": False,
         "platforms": platforms,
     }
-    # Global mediaItems attach to every network and kill video unfurls.
-    # Only set them when there is no video (still-only post) or IG is the sole target.
-    if still and not has_video:
-        payload["mediaItems"] = [{"url": still, "type": "image"}]
+    if os.environ.get("LATE_PROFILE_ID"):
+        payload["profileId"] = os.environ["LATE_PROFILE_ID"]
+    return payload
+
+
+def instagram_payload(
+    copy: dict,
+    when: str,
+    cfg: dict,
+    still: str,
+    flourish: str,
+) -> dict | None:
+    """Instagram must get top-level mediaItems. X cannot share that payload."""
+    acc = os.environ.get("LATE_INSTAGRAM_ACCOUNT_ID", "")
+    if not acc or not still:
+        return None
+    when_s = when.replace(" ", "T")
+    if len(when_s) == 16:
+        when_s += ":00"
+    feed = {
+        "platform": "instagram",
+        "accountId": acc,
+        "customContent": copy.get("instagram") or copy.get("twitter") or "",
+        "platformSpecificData": {
+            "firstComment": copy.get("instagram_first_comment")
+            or copy.get("ig_first_comment")
+            or "",
+        },
+    }
+    platforms = [feed]
+    if flourish == "story":
+        platforms.append(
+            {
+                "platform": "instagram",
+                "accountId": acc,
+                "customContent": "",
+                "platformSpecificData": {"contentType": "story"},
+            }
+        )
+        print("  instagram feed + story (own Late job, mediaItems)")
+    else:
+        print("  instagram feed (own Late job, mediaItems)")
+    payload = {
+        "content": copy.get("instagram") or copy.get("title") or "",
+        "title": ((copy.get("title") or "golf")[:70] + " · IG"),
+        "timezone": cfg.get("timezone", "America/New_York"),
+        "scheduledFor": when_s,
+        "publishNow": False,
+        "isDraft": False,
+        "mediaItems": [{"url": still, "type": "image"}],
+        "platforms": platforms,
+    }
     if os.environ.get("LATE_PROFILE_ID"):
         payload["profileId"] = os.environ["LATE_PROFILE_ID"]
     return payload
@@ -596,6 +618,22 @@ def run_once(
         result["late_id"] = late_id
         result["status"] = status
         print("LATE       ", late_id, status)
+        ig_id = ""
+        try:
+            igp = instagram_payload(copy, when_s, cfg, still, flourish)
+            if igp:
+                igres = create_post(
+                    igp,
+                    idempotency_key=f"eagleeye-ig-{story['id']}-{when_s.replace(' ', 'T')}",
+                )
+                igpost = igres.get("post") or igres.get("existingPost") or igres
+                ig_id = str(igpost.get("_id") or igpost.get("id") or "")
+                print("IG LATE    ", ig_id, igpost.get("status"), "mediaItems=1")
+            else:
+                print("IG LATE     skipped — no hosted still or account")
+        except Exception as e:  # noqa: BLE001
+            print("  instagram failed:", e)
+        result["ig_id"] = ig_id
         result["flourish"] = flourish
         to_addr = cfg.get("report_email") or os.environ.get("REPORT_EMAIL") or "eagleeyegolfapp@gmail.com"
         body = (
@@ -608,6 +646,7 @@ def run_once(
             f"Still:     {still}\n"
             f"Formats:   core + {flourish}\n"
             f"Late id:   {late_id}\n"
+            f"IG id:     {ig_id or '(none)'}\n"
             f"Status:    {status}\n\n"
             f"Caption:\n{copy['twitter']}\n"
         )

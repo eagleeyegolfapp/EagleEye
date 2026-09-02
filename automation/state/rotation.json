@@ -10,6 +10,7 @@
     "community",
     "news",
     "news",
+    "community",
     "community"
   ],
   "video_ids": [
@@ -19,7 +20,9 @@
     "Ht08F6y8sao",
     "U3misH4gzvM",
     "wfPMQdIqNjU",
-    "yt-wfPMQdIqNjU"
+    "yt-wfPMQdIqNjU",
+    "AcSHHdaF72A",
+    "yt-AcSHHdaF72A"
   ],
   "used_keys": [
     "9Z5jTTcoaI4",
@@ -37,29 +40,40 @@
     "wfPMQdIqNjU",
     "yt-wfPMQdIqNjU",
     "youtube:wfPMQdIqNjU",
-    "fp:pgatourchampionshighlightstheallychallenge2026"
+    "fp:pgatourchampionshighlightstheallychallenge2026",
+    "AcSHHdaF72A",
+    "yt-AcSHHdaF72A",
+    "youtube:AcSHHdaF72A",
+    "fp:hardestchallengeatthehardestcourse"
   ],
   "last": {
     "lane": "community",
-    "when": "2026-09-02 06:00",
-    "headline": "PGA TOUR Champions Highlights | The Ally Challenge | 2026",
-    "video_url": "https://www.youtube.com/watch?v=wfPMQdIqNjU",
-    "still": "https://media.zernio.com/temp/1788312775341_7uwlkw26_yt-wfPMQdIqNjU.jpg",
-    "photo_credit": "Photo: \"Volkswagen Beetle and Renault R4\" by Clemens Vasters is licensed under CC BY 2.0. To view a copy of this license, visit https://creativecommons.org/licenses/by/2.0/.",
+    "when": "2026-09-02 08:30",
+    "headline": "Hardest Challenge at the Hardest Course",
+    "video_url": "https://www.youtube.com/watch?v=AcSHHdaF72A",
+    "still": "https://media.zernio.com/temp/1788313813267_4m9igree_yt-AcSHHdaF72A.jpg",
+    "photo_credit": "Photo: \"Palm Course - Reverse\" by Sam Howzit is licensed under CC BY 2.0. To view a copy of this license, visit https://creativecommons.org/licenses/by/2.0/.",
     "packaged": "official-video",
-    "copy": "Steven Alker carving it up again while everyone else fights for scraps at Warwick Hills. PGA TOUR Champions with the usual senior highlights. Who actually has the best iron game left on the Champions Tour?\n\nhttps://www.youtube.com/watch?v=wfPMQdIqNjU",
-    "late_id": "6a977cca2404350ecfc86309",
+    "flourish": "story",
+    "copy": "Good Good Girls tried to break that course with their challenge and got broken instead. The rough chewed them up and spit out worse scores than most hackers post on a Saturday. Would you rather face that setup or play 18 with nothing but a 7-iron?\n\nhttps://www.youtube.com/watch?v=AcSHHdaF72A",
+    "late_id": "6a9780d7d2e02274619b9056",
     "status": "scheduled"
   },
   "posted_slots": {
-    "2026-09-02 06:00": "scheduled"
+    "2026-09-02 06:00": "scheduled",
+    "2026-09-02 08:30": "scheduled"
   },
   "used_creators": [
-    "PGA TOUR Champions"
+    "PGA TOUR Champions",
+    "Good Good Girls"
   ],
   "recent_copy": [
-    "Steven Alker carving it up again while everyone else fights for scraps at Warwick Hills. PGA TOUR Champions with the usual senior highlights. Who actually has the best iron game le"
+    "Steven Alker carving it up again while everyone else fights for scraps at Warwick Hills. PGA TOUR Champions with the usual senior highlights. Who actually has the best iron game le",
+    "Good Good Girls tried to break that course with their challenge and got broken instead. The rough chewed them up and spit out worse scores than most hackers post on a Saturday. Wou"
   ],
   "reddit_weekly_iso": "2026-W36",
-  "reddit_weekly_index": 1
+  "reddit_weekly_index": 1,
+  "flourishes": [
+    "story"
+  ]
 }
