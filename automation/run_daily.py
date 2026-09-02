@@ -57,12 +57,16 @@ def main() -> None:
     slots = remaining_slots(cfg, args.when or None, one=one)
     cap = max(1, int(cfg.get("max_posts_per_run") or 4))
     slots = slots[:cap]
-    deadline = time.time() + max(60, int(cfg.get("max_runtime_sec") or 720))
-    max_fail = max(1, int(cfg.get("max_failures_per_run") or 2))
+    deadline = time.time() + max(60, int(cfg.get("max_runtime_sec") or 900))
+    max_fail = max(1, int(cfg.get("max_failures_per_run") or 3))
     print("  slots    ", slots)
     print("  cap      ", cap, "runtime_s", int(deadline - time.time()), "max_fail", max_fail)
+    if not slots:
+        print("STOP       no free slots (already booked in Late or local state)")
+        return None
     last = None
     fails = 0
+    ok_n = 0
     for when in slots:
         if time.time() > deadline:
             print("STOP       runtime cap — not posting more this run")
@@ -72,7 +76,9 @@ def main() -> None:
             st = (last or {}).get("status") or ""
             if st in {"ended"}:
                 break
-            if live and st not in {"scheduled", "published", "submitted", "already-posted", "skipped-day", "dry-run"}:
+            if st in {"scheduled", "published", "submitted"}:
+                ok_n += 1
+            elif live and st not in {"already-posted", "skipped-day", "dry-run"}:
                 fails += 1
         except Exception as e:  # noqa: BLE001
             print("FAIL      ", e)
@@ -81,6 +87,9 @@ def main() -> None:
             print("STOP       too many failures this run")
             break
         time.sleep(1)
+    print("  result   scheduled", ok_n, "fails", fails)
+    if live and ok_n == 0 and fails:
+        sys.exit(1)
     return last
 
 

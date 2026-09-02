@@ -14,6 +14,81 @@ from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
 HOST, PORT = "127.0.0.1", 8787
+sys.path.insert(0, str(HERE))
+from workflow_one import load_dotenv  # noqa: E402
+
+load_dotenv(HERE / ".env")
+_LOCK = threading.Lock()
+ACTIVITY: dict = {
+    "active": False,
+    "kind": "",
+    "lines": [],
+    "done": True,
+    "ok": True,
+    "error": "",
+}
+
+
+def _activity_snapshot() -> dict:
+    with _LOCK:
+        return dict(ACTIVITY)
+
+
+def _run_job(cmd: list[str], kind: str) -> None:
+    env = os.environ.copy()
+    env["ALLOW_LOCAL_LIVE"] = "1"
+    env["PYTHONUNBUFFERED"] = "1"
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(HERE),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=env,
+            bufsize=1,
+        )
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            text = line.rstrip()
+            if not text:
+                continue
+            with _LOCK:
+                ACTIVITY["lines"] = (ACTIVITY["lines"] + [text])[-80:]
+        code = proc.wait(timeout=900)
+        with _LOCK:
+            ACTIVITY["ok"] = code == 0
+            ACTIVITY["error"] = "" if code == 0 else "Run failed. See the log."
+            ACTIVITY["lines"] = ACTIVITY["lines"] + (
+                ["Done — in Late."] if code == 0 else ["Failed."]
+            )
+    except Exception as e:  # noqa: BLE001
+        with _LOCK:
+            ACTIVITY["ok"] = False
+            ACTIVITY["error"] = str(e)
+            ACTIVITY["lines"] = ACTIVITY["lines"] + [str(e)]
+    finally:
+        with _LOCK:
+            ACTIVITY["active"] = False
+            ACTIVITY["done"] = True
+
+
+def _start_job(cmd: list[str], kind: str) -> tuple[bool, str]:
+    with _LOCK:
+        if ACTIVITY.get("active"):
+            return False, "Already creating a post. Wait for this one to finish."
+        ACTIVITY.update(
+            {
+                "active": True,
+                "kind": kind,
+                "lines": ["Starting " + kind + "…"],
+                "done": False,
+                "ok": None,
+                "error": "",
+            }
+        )
+    threading.Thread(target=_run_job, args=(cmd, kind), daemon=True).start()
+    return True, ""
 
 PAGE = r"""<!doctype html>
 <html lang="en">
@@ -95,6 +170,44 @@ PAGE = r"""<!doctype html>
   .meta strong { color:var(--ink); font-weight:500; }
   .pill { display:inline-block; border:1px solid var(--gold); color:var(--gold); border-radius:99px;
     padding:3px 9px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+  .banner { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+    margin:-8px 0 22px; padding:14px 18px; border-radius:14px; border:1px solid var(--line);
+    background:#0C0D11; }
+  .banner .who { font-size:18px; font-weight:600; letter-spacing:.04em; }
+  .banner .sub { color:var(--muted); font-size:13px; margin-top:2px; }
+  .banner.armed { border-color:#2a4a2a; box-shadow:0 0 0 1px rgba(143,203,143,.18) inset; }
+  .banner.armed .who { color:var(--ok); }
+  .banner.paused { border-color:#4a2a2a; }
+  .banner.paused .who { color:#E07A7A; }
+  .banner.busy { border-color:var(--gold); background:linear-gradient(90deg, rgba(201,162,39,.16), #0C0D11 55%);
+    animation: pulseBan 1.4s ease-in-out infinite; }
+  .banner.busy .who { color:var(--gold2); }
+  @keyframes pulseBan { 0%,100% { box-shadow:0 0 0 0 rgba(201,162,39,.35); }
+    50% { box-shadow:0 0 28px 0 rgba(201,162,39,.45); } }
+  .ov { position:fixed; inset:0; z-index:80; display:none; align-items:center; justify-content:center;
+    background:rgba(4,5,7,.82); backdrop-filter:blur(10px); padding:24px; }
+  .ov.on { display:flex; }
+  .ovbox { width:min(640px, 100%); background:#0C0D11; border:1px solid var(--gold);
+    border-radius:22px; padding:28px 26px 22px; box-shadow:0 30px 80px rgba(0,0,0,.55), 0 0 40px rgba(201,162,39,.18); }
+  .ovbox h3 { margin:0; font-family:"Cormorant Garamond", serif; font-size:32px; color:var(--gold2); letter-spacing:.03em; }
+  .ovbox .kicker { color:var(--gold); font-size:11px; letter-spacing:.22em; text-transform:uppercase; margin-bottom:6px; }
+  .ringwrap { display:flex; justify-content:center; margin:18px 0 8px; }
+  .ring { width:72px; height:72px; border-radius:50%; border:3px solid #2A271C; border-top-color:var(--gold);
+    animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .steps { display:flex; flex-direction:column; gap:8px; margin:18px 0 14px; }
+  .st { display:grid; grid-template-columns:18px 1fr; gap:10px; align-items:center;
+    font-size:14px; color:var(--muted); }
+  .st .b { width:10px; height:10px; border-radius:50%; background:#2A271C; }
+  .st.on { color:var(--gold2); }
+  .st.on .b { background:var(--gold); box-shadow:0 0 10px var(--gold); animation: blink 1s infinite; }
+  .st.done { color:var(--ok); }
+  .st.done .b { background:var(--ok); box-shadow:none; animation:none; }
+  @keyframes blink { 50% { opacity:.35; } }
+  .log { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; line-height:1.45;
+    color:#C9C2B0; background:#08090C; border:1px solid var(--line); border-radius:10px;
+    max-height:160px; overflow:auto; padding:10px 12px; white-space:pre-wrap; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
 </style>
 </head>
 <body>
@@ -109,6 +222,30 @@ PAGE = r"""<!doctype html>
     </div>
     <div class="live"><span class="dot" id="dot"></span><span id="live_lbl">automation on</span></div>
   </header>
+
+  <div class="banner armed" id="banner">
+    <div>
+      <div class="who" id="ban_who">ARMED</div>
+      <div class="sub" id="ban_sub">GitHub Actions posts even if this window is closed.</div>
+    </div>
+    <div class="sub" id="ban_next"></div>
+  </div>
+
+  <div class="ov" id="ov" aria-live="assertive">
+    <div class="ovbox">
+      <div class="kicker" id="ov_kick">Post creation</div>
+      <h3 id="ov_title">Creating a post</h3>
+      <div class="ringwrap"><div class="ring"></div></div>
+      <div class="steps">
+        <div class="st" id="st_research"><span class="b"></span><span>Finding a live golf clip</span></div>
+        <div class="st" id="st_copy"><span class="b"></span><span>Writing the take</span></div>
+        <div class="st" id="st_photo"><span class="b"></span><span>Matching an Instagram photo</span></div>
+        <div class="st" id="st_pack"><span class="b"></span><span>Packaging X · IG · Reddit</span></div>
+        <div class="st" id="st_late"><span class="b"></span><span>Sending to Late</span></div>
+      </div>
+      <div class="log" id="ov_log">Starting…</div>
+    </div>
+  </div>
 
   <div class="grid">
     <section class="card">
@@ -173,8 +310,8 @@ PAGE = r"""<!doctype html>
         <h2>How a post is built</h2>
         <div class="pipe">
           <div class="step"><div class="num">1</div><div><b>Real clip or article</b><small>Official YouTube, Shorts, Vimeo, or X — linked, never ripped.</small></div></div>
-          <div class="step"><div class="num">2</div><div><b>X + Reddit embed that clip</b><small>Every post hits your Reddit profile. Once a week, the same post also goes to one rotating golf subreddit (r/golf, r/PGA_Tour, r/golfswing…).</small></div></div>
-          <div class="step"><div class="num">3</div><div><b>Instagram always gets a golf photo</b><small>IG cannot play a linked YouTube. We search CC/PD photos of the subject, then scenic golf, then Commons. Credit in the first comment.</small></div></div>
+          <div class="step"><div class="num">2</div><div><b>X + Reddit every time</b><small>One Late post per slot. X is usually a single tweet with the official clip. Reddit is your profile, plus one golf subreddit once a week.</small></div></div>
+          <div class="step"><div class="num">3</div><div><b>One extra, not all of them</b><small>Each slot rolls thread, Story, or poll — never stacked. Keeps it at 5 Late posts/day, not 10.</small></div></div>
         </div>
       </section>
       <section class="card">
@@ -194,6 +331,70 @@ DAYS.forEach((n,i) => {
     `<label><input type="checkbox" id="d${i}" data-day="${i}"/> ${n}</label>`);
 });
 function show(t){ document.getElementById("msg").textContent = t; }
+let busyTimer = null;
+function setBusy(on, title, kicker){
+  const ov = document.getElementById("ov");
+  ov.className = "ov" + (on ? " on" : "");
+  document.getElementById("run").disabled = on;
+  document.getElementById("run_all").disabled = on;
+  document.getElementById("spot_go").disabled = on;
+  if (title) document.getElementById("ov_title").textContent = title;
+  if (kicker) document.getElementById("ov_kick").textContent = kicker;
+  if (on) {
+    ["st_research","st_copy","st_photo","st_pack","st_late"].forEach(id => document.getElementById(id).className = "st");
+    document.getElementById("ov_log").textContent = "Starting…";
+    const ban = document.getElementById("banner");
+    ban.className = "banner busy";
+    document.getElementById("ban_who").textContent = "CREATING A POST";
+    document.getElementById("ban_sub").textContent = "Do not close this window until this finishes.";
+    document.getElementById("live_lbl").textContent = "creating now";
+    document.getElementById("dot").className = "dot";
+  }
+}
+function paintSteps(text){
+  const t = (text||"").toLowerCase();
+  const mark = (id, cond, done) => {
+    const el = document.getElementById(id);
+    if (done) el.className = "st done";
+    else if (cond && el.className !== "st done") el.className = "st on";
+  };
+  mark("st_research", /lane|community|news pick|spotlight|finding/.test(t), /headline|embed/.test(t));
+  mark("st_copy", /x copy|x chars|headline|grok/.test(t), /ig photo|ig still|packaged/.test(t));
+  mark("st_photo", /ig still|ig photo/.test(t), /packaged|reddit/.test(t));
+  mark("st_pack", /packaged|reddit|embed/.test(t), /\blate\b/.test(t));
+  mark("st_late", /\blate\b/.test(t), /scheduled|published|submitted/.test(t));
+}
+async function pollBusy(){
+  try {
+    const r = await fetch("/api/activity");
+    const a = await r.json();
+    const log = (a.lines||[]).join("\n") || "Working…";
+    document.getElementById("ov_log").textContent = log;
+    const box = document.getElementById("ov_log");
+    box.scrollTop = box.scrollHeight;
+    paintSteps(log);
+    if (a.active || a.ok === null) {
+      setBusy(true, a.kind === "spotlight" ? "Building a series" : (a.kind === "fill" ? "Filling today's slots" : "Creating a post"),
+        a.kind === "spotlight" ? "Spotlight" : "Live run");
+      return;
+    }
+    if (busyTimer) { clearInterval(busyTimer); busyTimer = null; }
+    setBusy(false);
+    const msg = a.ok ? (a.kind === "spotlight"
+      ? "Series is in Late. Independent of the daily times."
+      : "In Late. Cloud posting still runs if you close this window.")
+      : (a.error || "Run finished with an error.");
+    show(msg);
+    const sbox = document.getElementById("spot_msg");
+    if (a.kind === "spotlight") sbox.textContent = msg;
+    load();
+  } catch (e) { /* keep polling */ }
+}
+function watchBusy(){
+  if (busyTimer) clearInterval(busyTimer);
+  pollBusy();
+  busyTimer = setInterval(pollBusy, 450);
+}
 function paintMix(){
   const n = +document.getElementById("mix_news").value || 0;
   const c = +document.getElementById("mix_community").value || 0;
@@ -229,8 +430,26 @@ async function load(){
   const r = await fetch("/api/config");
   const d = await r.json();
   document.getElementById("enabled").checked = !!d.enabled;
-  document.getElementById("dot").className = "dot" + (d.enabled ? "" : " off");
-  document.getElementById("live_lbl").textContent = d.enabled ? "automation on" : "paused";
+  const creating = !!(d.activity && d.activity.active);
+  document.getElementById("dot").className = "dot" + (d.enabled || creating ? "" : " off");
+  document.getElementById("live_lbl").textContent = creating ? "creating now" : (d.enabled ? "automation on" : "paused");
+  const ban = document.getElementById("banner");
+  const nexts = (d.next_fires || []).map(x => x.next).filter(Boolean);
+  document.getElementById("ban_next").textContent = nexts[0] ? ("Next slot  " + nexts[0] + " ET") : "";
+  if (creating) {
+    ban.className = "banner busy";
+    document.getElementById("ban_who").textContent = "CREATING A POST";
+    document.getElementById("ban_sub").textContent = "Research → caption → photo → Late. Leave this open until it finishes.";
+  } else if (d.enabled) {
+    ban.className = "banner armed";
+    document.getElementById("ban_who").textContent = "ARMED";
+    document.getElementById("ban_sub").textContent = "GitHub Actions builds posts at 5:00 AM ET. Late publishes at each time below. Close this window anytime.";
+  } else {
+    ban.className = "banner paused";
+    document.getElementById("ban_who").textContent = "PAUSED";
+    document.getElementById("ban_sub").textContent = "Nothing will post until you turn it on and save.";
+  }
+  if (creating && !busyTimer) watchBusy();
   const times = (d.slots||[]).map(s => s.time).filter(Boolean);
   const nextMap = {};
   (d.next_fires || []).forEach(x => { if (x.time) nextMap[x.time] = x.next; });
@@ -314,15 +533,20 @@ document.getElementById("ends_on").addEventListener("change", async () => {
   load();
 });
 async function kick(fill){
-  show("Working… finding a real clip and a rights-safe photo of the subject.");
+  setBusy(true, fill ? "Filling today's slots" : "Creating a post", fill ? "Fill remaining" : "Next slot");
+  show("");
   const r = await fetch("/api/run", {
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body: JSON.stringify({fill: !!fill}),
   });
   const d = await r.json();
-  show(d.ok ? "In Late. Search Scheduled by title — the old bulk queue sits on top." : (d.error||"run failed"));
-  load();
+  if (!d.started && d.error) {
+    setBusy(false);
+    show(d.error);
+    return;
+  }
+  watchBusy();
 }
 document.getElementById("run").onclick = () => kick(false);
 document.getElementById("run_all").onclick = () => kick(true);
@@ -332,17 +556,20 @@ document.getElementById("spot_go").onclick = async () => {
   const every = +document.getElementById("spot_every").value || 4;
   const box = document.getElementById("spot_msg");
   if (!url) { box.textContent = "Paste a link first."; return; }
-  box.textContent = "Building "+count+" posts about that clip…";
+  box.textContent = "";
+  setBusy(true, "Building a series", "Spotlight · "+count+" posts");
   const r = await fetch("/api/spotlight", {
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body: JSON.stringify({url, count, every_hours: every}),
   });
   const d = await r.json();
-  box.textContent = d.ok
-    ? `Scheduled ${d.n||count} posts. Independent of the daily times. Search Late by the video title.`
-    : (d.error||"failed");
-  load();
+  if (!d.started && d.error) {
+    setBusy(false);
+    box.textContent = d.error;
+    return;
+  }
+  watchBusy();
 };
 load();
 </script>
@@ -377,8 +604,12 @@ class Handler(BaseHTTPRequestHandler):
             state_path = HERE / "state" / "rotation.json"
             if state_path.exists():
                 cfg["last"] = json.loads(state_path.read_text()).get("last")
+            cfg["activity"] = _activity_snapshot()
             raw = json.dumps(cfg).encode()
             self._send(200, raw, "application/json")
+            return
+        if path == "/api/activity":
+            self._send(200, json.dumps(_activity_snapshot()).encode(), "application/json")
             return
         self._send(404, b"not found", "text/plain")
 
@@ -409,70 +640,36 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, b'{"ok":true}', "application/json")
             return
         if path == "/api/run":
-            try:
-                extra = json.loads(raw.decode() or "{}")
-                cmd = [sys.executable, str(HERE / "run_daily.py"), "--live", "--kind", "auto"]
-                if not extra.get("fill"):
-                    cmd.append("--one")
-                env = os.environ.copy()
-                env["ALLOW_LOCAL_LIVE"] = "1"
-                proc = subprocess.run(
-                    cmd,
-                    cwd=str(HERE),
-                    capture_output=True,
-                    text=True,
-                    timeout=420,
-                    env=env,
-                )
-                ok = proc.returncode == 0
-                body = json.dumps(
-                    {
-                        "ok": ok,
-                        "error": "" if ok else (proc.stderr or proc.stdout)[-1500:],
-                    }
-                ).encode()
-                self._send(200 if ok else 500, body, "application/json")
-            except Exception as e:  # noqa: BLE001
-                self._send(500, json.dumps({"ok": False, "error": str(e)}).encode(), "application/json")
+            extra = json.loads(raw.decode() or "{}")
+            cmd = [sys.executable, "-u", str(HERE / "run_daily.py"), "--live", "--kind", "auto"]
+            kind = "fill" if extra.get("fill") else "next"
+            if kind == "next":
+                cmd.append("--one")
+            started, err = _start_job(cmd, kind)
+            self._send(
+                200 if started else 409,
+                json.dumps({"started": started, "error": err}).encode(),
+                "application/json",
+            )
             return
         if path == "/api/spotlight":
-            try:
-                extra = json.loads(raw.decode() or "{}")
-                url = (extra.get("url") or "").strip()
-                count = str(int(extra.get("count") or 3))
-                every = str(float(extra.get("every_hours") or 4))
-                if not url:
-                    raise ValueError("Paste a link first.")
-                env = os.environ.copy()
-                env["ALLOW_LOCAL_LIVE"] = "1"
-                proc = subprocess.run(
-                    [
-                        sys.executable,
-                        str(HERE / "run_daily.py"),
-                        "--live",
-                        "--spotlight",
-                        url,
-                        "--count",
-                        count,
-                        "--every-hours",
-                        every,
-                    ],
-                    cwd=str(HERE),
-                    capture_output=True,
-                    text=True,
-                    timeout=900,
-                    env=env,
-                )
-                ok = proc.returncode == 0
-                n = (proc.stdout or "").count("LATE")
-                err = "" if ok else (proc.stderr or proc.stdout)[-1800:]
-                self._send(
-                    200 if ok else 500,
-                    json.dumps({"ok": ok, "n": n, "error": err}).encode(),
-                    "application/json",
-                )
-            except Exception as e:  # noqa: BLE001
-                self._send(500, json.dumps({"ok": False, "error": str(e)}).encode(), "application/json")
+            extra = json.loads(raw.decode() or "{}")
+            url = (extra.get("url") or "").strip()
+            if not url:
+                self._send(400, b'{"started":false,"error":"Paste a link first."}', "application/json")
+                return
+            count = str(int(extra.get("count") or 3))
+            every = str(float(extra.get("every_hours") or 4))
+            cmd = [
+                sys.executable, "-u", str(HERE / "run_daily.py"), "--live",
+                "--spotlight", url, "--count", count, "--every-hours", every,
+            ]
+            started, err = _start_job(cmd, "spotlight")
+            self._send(
+                200 if started else 409,
+                json.dumps({"started": started, "error": err}).encode(),
+                "application/json",
+            )
             return
         self._send(404, b"not found", "text/plain")
 

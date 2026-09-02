@@ -9,14 +9,17 @@
     "news",
     "community",
     "news",
-    "news"
+    "news",
+    "community"
   ],
   "video_ids": [
     "9Z5jTTcoaI4",
     "UG_3kl4fP9Y",
     "PJNJqd4gTRE",
     "Ht08F6y8sao",
-    "U3misH4gzvM"
+    "U3misH4gzvM",
+    "wfPMQdIqNjU",
+    "yt-wfPMQdIqNjU"
   ],
   "used_keys": [
     "9Z5jTTcoaI4",
@@ -30,18 +33,33 @@
     "youtube:Ht08F6y8sao",
     "U3misH4gzvM",
     "yt-U3misH4gzvM",
-    "fp:presidentscupselectionspecial"
+    "fp:presidentscupselectionspecial",
+    "wfPMQdIqNjU",
+    "yt-wfPMQdIqNjU",
+    "youtube:wfPMQdIqNjU",
+    "fp:pgatourchampionshighlightstheallychallenge2026"
   ],
   "last": {
-    "lane": "news",
-    "when": "2026-09-01 19:52",
-    "headline": "Presidents Cup Selection Special",
-    "video_url": "https://www.youtube.com/watch?v=Ht08F6y8sao",
-    "still": "https://media.zernio.com/temp/1788306670554_0q25gppr_news-20260901.jpg",
-    "photo_credit": "Photo: \"U.S. Naval War College President's Cup Hockey Game\" by U.S. Naval War College is licensed under CC BY 2.0. To view a copy of this license, visit https://creativecommons.org/licenses/by/2.0/.",
+    "lane": "community",
+    "when": "2026-09-02 06:00",
+    "headline": "PGA TOUR Champions Highlights | The Ally Challenge | 2026",
+    "video_url": "https://www.youtube.com/watch?v=wfPMQdIqNjU",
+    "still": "https://media.zernio.com/temp/1788312775341_7uwlkw26_yt-wfPMQdIqNjU.jpg",
+    "photo_credit": "Photo: \"Volkswagen Beetle and Renault R4\" by Clemens Vasters is licensed under CC BY 2.0. To view a copy of this license, visit https://creativecommons.org/licenses/by/2.0/.",
     "packaged": "official-video",
-    "copy": "PGA TOUR drops the Presidents Cup squad and the takes are already flying. Medinah's gonna be a circus. https://www.youtube.com/watch?v=Ht08F6y8sao",
-    "late_id": "6a9764f0c8ca4e03d86a1c54",
+    "copy": "Steven Alker carving it up again while everyone else fights for scraps at Warwick Hills. PGA TOUR Champions with the usual senior highlights. Who actually has the best iron game left on the Champions Tour?\n\nhttps://www.youtube.com/watch?v=wfPMQdIqNjU",
+    "late_id": "6a977cca2404350ecfc86309",
     "status": "scheduled"
-  }
+  },
+  "posted_slots": {
+    "2026-09-02 06:00": "scheduled"
+  },
+  "used_creators": [
+    "PGA TOUR Champions"
+  ],
+  "recent_copy": [
+    "Steven Alker carving it up again while everyone else fights for scraps at Warwick Hills. PGA TOUR Champions with the usual senior highlights. Who actually has the best iron game le"
+  ],
+  "reddit_weekly_iso": "2026-W36",
+  "reddit_weekly_index": 1
 }

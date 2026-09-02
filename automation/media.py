@@ -63,7 +63,16 @@ def generate_still(prompt: str, slug: str) -> str | None:
 
 
 def download(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "EagleEyeGolf-media/1.0"})
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+            ),
+            "Accept": "image/jpeg,image/png,image/webp,image/*,*/*",
+        },
+    )
     with urllib.request.urlopen(req, timeout=60, context=CTX) as resp:
         return resp.read()
 

@@ -31,13 +31,15 @@ Rules:
 - Emojis: 0-2, only if they land (👀 😭 🔥 💀). No hashtag soup.
 - Never mention EagleEye, App Store, unlock, subscription, ads, or download.
 - Never pretend we filmed it or collab'd.
-- X: under 200 characters. The system appends the URL. Do not put the URL in twitter yourself.
+- X single tweet (twitter): under 200 characters. The system appends the URL. Do not put the URL in twitter yourself.
+- X thread (twitter_thread): array of exactly 3 tweets. 1 = hook (no URL). 2 = the take. 3 = a specific question golfers will fight about. Each under 200 characters. No URLs.
+- X poll: poll_question is the question (under 180 chars, no URL). poll_options is 3 or 4 answers, EACH 25 characters max, punchy, no emoji.
 - Instagram: 2-4 short lines. Same take, a little more room.
 - Reddit title: debate hook, under 80 characters, no emoji dump.
 - Reddit body: 1-2 sentences. Do not paste the URL; the system appends it.
 - ig_first_comment: ONLY Watch/Read links if we pass them. No recap, no photo credit (we add credit later).
 
-Return JSON only with keys: twitter, instagram, reddit_title, reddit_body, ig_first_comment."""
+Return JSON only with keys: twitter, twitter_thread, poll_question, poll_options, instagram, reddit_title, reddit_body, ig_first_comment."""
 
 
 def _chat(prompt: str) -> str | None:
@@ -99,14 +101,64 @@ def fallback(story: dict, ask: bool = False) -> dict:
         reddit_title = headline[:80]
         reddit_body = headline
     comment = f"Watch 👉 {video}" if video else ""
+    if story.get("lane") == "community":
+        thread = [
+            twitter[:180],
+            ("That's the clip. " + headline)[:180],
+            "You buying it or scrolling?"[:180],
+        ]
+        poll_q = "You buying this one?"
+        poll_opts = ["Yes", "No", "Already tried", "Hard pass"]
+    else:
+        thread = [
+            twitter[:180],
+            "That's the news. That's the tweet.",
+            "Right call or safe pick?",
+        ]
+        poll_q = "Right call?"
+        poll_opts = ["Yes", "No", "Too soon", "Who cares"]
     return {
         "twitter": twitter,
+        "twitter_thread": thread,
+        "poll_question": poll_q,
+        "poll_options": poll_opts,
         "instagram": ig,
         "reddit_title": reddit_title,
         "reddit_body": reddit_body,
         "ig_first_comment": comment,
         "title": reddit_title,
     }
+
+
+def _trim_tweet(text: str, limit: int = 240) -> str:
+    t = re.sub(r"\s*https?://\S+", "", (text or "")).strip()
+    t = re.sub(r"\s+", " ", t)
+    if twitter_len(t) <= limit:
+        return t
+    while t and twitter_len(t) > limit - 1:
+        t = t[:-1]
+    return t.rstrip() + "…"
+
+
+def _clean_poll_options(raw) -> list[str]:
+    opts: list[str] = []
+    if isinstance(raw, str):
+        raw = [x.strip() for x in re.split(r"[,\n|/]+", raw) if x.strip()]
+    if not isinstance(raw, list):
+        return []
+    for item in raw:
+        if isinstance(item, dict):
+            item = item.get("text") or item.get("label") or item.get("option") or ""
+        s = re.sub(r"\s+", " ", str(item or "")).strip()
+        if not s:
+            continue
+        if len(s) > 25:
+            s = s[:25].rstrip()
+        if s.lower() not in {o.lower() for o in opts}:
+            opts.append(s)
+        if len(opts) == 4:
+            break
+    return opts if len(opts) >= 2 else []
 
 
 def write_copy(
@@ -146,11 +198,17 @@ def write_copy(
     parsed = _parse_json(_chat(user) or "")
     base = fallback(story, ask=ask)
     if parsed:
-        for k in ("twitter", "instagram", "reddit_title", "reddit_body", "ig_first_comment"):
+        for k in ("twitter", "instagram", "reddit_title", "reddit_body", "ig_first_comment", "poll_question"):
             if parsed.get(k):
                 base[k] = str(parsed[k]).strip()
         if parsed.get("reddit_title"):
             base["title"] = str(parsed["reddit_title"]).strip()[:80]
+        th = parsed.get("twitter_thread")
+        if isinstance(th, list) and len(th) >= 2:
+            base["twitter_thread"] = [str(x).strip() for x in th if str(x).strip()][:4]
+        opts = _clean_poll_options(parsed.get("poll_options"))
+        if opts:
+            base["poll_options"] = opts
 
     # Always pin the official URL on X / Reddit. Don't rely on the model.
     tw = base["twitter"].strip()
@@ -168,6 +226,26 @@ def write_copy(
 
     # Do not cold-tag mega creators. Mentions get you muted, not collabs.
     base["twitter"] = tw
+    thread = [_trim_tweet(t) for t in (base.get("twitter_thread") or []) if str(t).strip()]
+    if len(thread) < 2:
+        hook = _trim_tweet(re.sub(r"\s*https?://\S+", "", tw))
+        thread = [hook or "Golf being golf.", "That's the clip.", "You buying it?"]
+    # URL lives on tweet 1 so X unfurls the official video.
+    if video:
+        t0 = _trim_tweet(thread[0], 220)
+        if video not in t0:
+            t0 = f"{t0}\n\n{video}"
+            if twitter_len(t0) > 280:
+                t0 = _trim_tweet(thread[0], 180)
+                t0 = f"{t0}\n\n{video}"
+        thread[0] = t0
+    base["twitter_thread"] = thread[:4]
+    pq = _trim_tweet(base.get("poll_question") or "You buying this?", 180)
+    base["poll_question"] = pq
+    opts = _clean_poll_options(base.get("poll_options"))
+    if not opts:
+        opts = ["Yes", "No", "Maybe", "Who cares"]
+    base["poll_options"] = opts
     body = (base.get("reddit_body") or base.get("title") or "").strip()
     body = re.sub(r"\s*https?://\S+", "", body).strip()
     if video:

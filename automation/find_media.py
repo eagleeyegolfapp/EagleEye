@@ -25,7 +25,7 @@ STOP = {
 OFF_TOPIC = re.compile(
     r"\b(hockey|tennis|basketball|soccer|football|baseball|nfl|nba|nhl|mlb|"
     r"volleyball|lacrosse|cricket|rugby|wrestling|boxing|ufc|nascar|"
-    r"winston cup|thunderbird|racing|motocross|skoal|"
+    r"winston cup|thunderbird|racing|motocross|skoal|volkswagen|beetle|renault|"
     r"swimming|marathon|esports|fortnite|console|war college|cake pop)\b",
     re.I,
 )

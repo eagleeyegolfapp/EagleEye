@@ -16,12 +16,13 @@ from find_media import credit_line, find_subject_image
 from media import download
 from research import active_events, fetch_link_story, research_community, research_news
 from story_quality import story_keys
-from workflow_one import load_config
+from workflow_one import load_config, twitter_len as _twlen
 
 # In-run dedupe so today's slots don't all pick the same clip before state is saved.
 _RUN_USED: set[str] = set()
 _RUN_CREATORS: list[str] = []
 _RUN_COPY: list[str] = []
+_RUN_FLOURISH: list[str] = []
 _RUN_LANES: list[str] = []
 
 HERE = Path(__file__).resolve().parent
@@ -164,22 +165,69 @@ def next_occurrence(hhmm: str, now: datetime | None = None) -> datetime:
 
 def slot_preview(cfg: dict) -> list[dict]:
     now = datetime.now(TZ)
-    return [
-        {"time": t, "next": next_occurrence(t, now).strftime("%Y-%m-%d %H:%M")}
-        for t in slot_times(cfg)
-    ]
+    booked = _booked_times()
+    out = []
+    for t in slot_times(cfg):
+        dt = next_occurrence(t, now)
+        for _ in range(14):
+            key = dt.strftime("%Y-%m-%d %H:%M")
+            if key not in booked:
+                break
+            dt = dt + timedelta(days=1)
+        out.append({"time": t, "next": dt.strftime("%Y-%m-%d %H:%M")})
+    return out
+
+
+def _booked_times() -> set[str]:
+    booked = set()
+    for k, st in (load_state().get("posted_slots") or {}).items():
+        if st in {"scheduled", "published", "submitted"}:
+            booked.add(k)
+    if not (os.environ.get("LATE_API_KEY") or "").strip():
+        return booked
+    try:
+        from late_client import list_posts
+
+        for p in list_posts(status="scheduled", limit=100):
+            raw = str(p.get("scheduledFor") or "")
+            if not raw:
+                continue
+            raw = raw.replace("Z", "+00:00")
+            try:
+                dt = datetime.fromisoformat(raw)
+            except ValueError:
+                continue
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=TZ)
+            booked.add(dt.astimezone(TZ).strftime("%Y-%m-%d %H:%M"))
+    except SystemExit:
+        return booked
+    except Exception as e:  # noqa: BLE001
+        print("  late    could not list scheduled:", e)
+    return booked
 
 
 def remaining_slots(cfg: dict, override: str | None, one: bool = False) -> list[str]:
     if override:
         return [override]
     now = datetime.now(TZ)
-    upcoming = [(next_occurrence(t, now), t) for t in slot_times(cfg)]
-    upcoming.sort(key=lambda x: x[0])
+    booked = _booked_times()
+    upcoming: list[datetime] = []
+    for t in slot_times(cfg):
+        dt = next_occurrence(t, now)
+        for _ in range(14):
+            key = dt.strftime("%Y-%m-%d %H:%M")
+            if key not in booked:
+                upcoming.append(dt)
+                break
+            dt = dt + timedelta(days=1)
+    upcoming.sort()
+    if not upcoming:
+        return []
     if one:
-        return [upcoming[0][0].strftime("%Y-%m-%d %H:%M")]
-    today = [dt for dt, _ in upcoming if dt.date() == now.date()]
-    chosen = today if today else [dt for dt, _ in upcoming]
+        return [upcoming[0].strftime("%Y-%m-%d %H:%M")]
+    today = [dt for dt in upcoming if dt.date() == now.date()]
+    chosen = today if today else upcoming[:1]
     return [dt.strftime("%Y-%m-%d %H:%M") for dt in chosen]
 
 
@@ -220,6 +268,27 @@ def weekly_reddit_targets(cfg: dict, state: dict) -> tuple[list[str], dict]:
     return [pick], {"reddit_weekly_iso": iso, "reddit_weekly_index": idx + 1}
 
 
+def pick_flourish(cfg: dict, state: dict) -> str:
+    """One extra format per slot: thread, story, or poll — never stacked."""
+    import random
+
+    mix = cfg.get("flourish") or {"none": 40, "thread": 25, "story": 20, "poll": 15}
+    weights = {k: int(v or 0) for k, v in mix.items() if int(v or 0) > 0}
+    if not weights:
+        weights = {"none": 40, "thread": 25, "story": 20, "poll": 15}
+    last = ((state.get("flourishes") or []) + _RUN_FLOURISH)[-1:] 
+    if last and last[0] in weights and len(weights) > 1:
+        weights = {k: v for k, v in weights.items() if k != last[0]} or weights
+    total = sum(weights.values())
+    r = random.uniform(0, total)
+    acc = 0.0
+    for name, w in weights.items():
+        acc += w
+        if acc >= r:
+            return name
+    return "none"
+
+
 def late_payload(
     story: dict,
     copy: dict,
@@ -227,6 +296,7 @@ def late_payload(
     cfg: dict,
     media: dict,
     extra_reddit: list[str] | None = None,
+    flourish: str = "none",
 ) -> dict:
     mapping = {
         "twitter": os.environ.get("LATE_TWITTER_ACCOUNT_ID", ""),
@@ -276,14 +346,56 @@ def late_payload(
             "accountId": acc,
             "customContent": copy.get(name, copy["reddit"]),
         }
+        if name == "twitter":
+            if flourish == "poll":
+                q = (copy.get("poll_question") or copy.get("twitter") or "").strip()
+                q = re.sub(r"\s*https?://\S+", "", q).strip()
+                opts = [str(o).strip()[:25] for o in (copy.get("poll_options") or []) if str(o).strip()][:4]
+                if q and len(opts) >= 2:
+                    if _twlen(q) > 250:
+                        q = q[:240].rstrip() + "…"
+                    item["customContent"] = q
+                    item["platformSpecificData"] = {
+                        "poll": {"options": opts, "duration_minutes": 1440}
+                    }
+                    print("  twitter  poll", q[:50], "|", " / ".join(opts))
+                else:
+                    print("  twitter  poll skipped — using single tweet")
+            elif flourish == "thread":
+                thread = [t for t in (copy.get("twitter_thread") or []) if t]
+                if len(thread) >= 2:
+                    items = [{"content": t} for t in thread[:4]]
+                    item["platformSpecificData"] = {"threadItems": items}
+                    item["customContent"] = items[0]["content"]
+                    print("  twitter  thread", len(items), "tweets")
+            else:
+                print("  twitter  single")
+            platforms.append(item)
+            continue
         if name == "instagram":
+            # Omit contentType for feed — Late only accepts "story" / "reels".
+            # "post" is invalid and Instagram ships with no media.
             item["platformSpecificData"] = {
-                "contentType": "post",
                 "firstComment": copy.get("instagram_first_comment")
                 or copy.get("ig_first_comment")
                 or "",
             }
             item["customMedia"] = [{"url": still, "type": "image"}]
+            platforms.append(item)
+            if flourish == "story":
+                platforms.append(
+                    {
+                        "platform": "instagram",
+                        "accountId": acc,
+                        "customContent": "",
+                        "platformSpecificData": {"contentType": "story"},
+                        "customMedia": [{"url": still, "type": "image"}],
+                    }
+                )
+                print("  instagram feed + story")
+            else:
+                print("  instagram feed")
+            continue
         platforms.append(item)
     if not platforms:
         raise SystemExit("No Late account IDs — connect X, Instagram, Reddit.")
@@ -307,23 +419,25 @@ def late_payload(
     return payload
 
 
-def host_media(url: str, slug: str, content_type: str = "image/jpeg") -> str:
-    """Upload to Late so X/IG can fetch it."""
-    if "getlate" in url or "zernio" in url:
-        return url
-    try:
-        from late_client import presign_and_upload
+FALLBACK_STILL = (
+    "https://raw.githubusercontent.com/TheSgambini/eagleeyelabsllc"
+    "/main/_late-media/test-golf-world-first-tee.jpg"
+)
 
-        blob = download(url)
-        if len(blob) < 1000:
-            return url
-        ext = "mp4" if "video" in content_type or url.endswith(".mp4") else "jpg"
-        hosted = presign_and_upload(blob, f"{slug}.{ext}", content_type)
-        print("  media   uploaded to Late", ext)
-        return hosted
-    except Exception as e:  # noqa: BLE001
-        print(f"  media   Late upload skipped ({e}); using source URL")
+
+def host_media(url: str, slug: str, content_type: str = "image/jpeg") -> str:
+    """Upload to Late so Instagram can fetch it. Never send Wikimedia/Flickr hotlinks."""
+    if "getlate" in url or "zernio.com" in url:
         return url
+    from late_client import presign_and_upload
+
+    blob = download(url)
+    if len(blob) < 2000:
+        raise RuntimeError(f"image too small ({len(blob)} bytes) from {url[:80]}")
+    ext = "mp4" if "video" in content_type or url.endswith(".mp4") else "jpg"
+    hosted = presign_and_upload(blob, f"{slug}.{ext}", content_type)
+    print("  media   uploaded to Late", ext, hosted[:60])
+    return hosted
 
 
 def run_once(
@@ -399,6 +513,9 @@ def run_once(
     weekly_patch: dict = {}
     if story_override is None:
         extra_reddit, weekly_patch = weekly_reddit_targets(cfg, state)
+    flourish = pick_flourish(cfg, state)
+    _RUN_FLOURISH.append(flourish)
+    print(f"FLOURISH   {flourish}  (one extra — not stacked)")
 
     photo = find_subject_image(story)
     credit = credit_line(photo)
@@ -415,8 +532,21 @@ def run_once(
     if live:
         found = resolve_accounts()
         persist_ids(found)
+        hosted = ""
         if still:
-            still = host_media(still, story["id"], "image/jpeg")
+            try:
+                hosted = host_media(still, story["id"], "image/jpeg")
+            except Exception as e:  # noqa: BLE001
+                print("  media   primary still failed:", e)
+        if not hosted:
+            fb = (cfg.get("fallback_still") or FALLBACK_STILL).strip()
+            try:
+                hosted = host_media(fb, "golf-fallback", "image/jpeg")
+            except Exception as e:  # noqa: BLE001
+                print("  media   fallback still failed:", e)
+        still = hosted
+        if not still:
+            raise SystemExit("Instagram needs a Late-hosted still. Upload failed.")
     media = {"still": still, "official": official, "photo": photo or {}}
     if not official and not still:
         raise SystemExit("No official embed and no rights-safe photo of the subject.")
@@ -435,6 +565,11 @@ def run_once(
     print("PACKAGED  ", kind_used)
     print("X CHARS   ", copy["twitter_chars"])
     print("X COPY    ", copy["twitter"].replace("\n", " / "))
+    th = copy.get("twitter_thread") or []
+    if th:
+        print("THREAD    ", " || ".join(t.replace("\n", " ")[:60] for t in th))
+    if copy.get("poll_question"):
+        print("POLL      ", copy["poll_question"], "|", " / ".join(copy.get("poll_options") or []))
 
     result = {
         "lane": lane,
@@ -444,12 +579,15 @@ def run_once(
         "still": still,
         "photo_credit": credit,
         "packaged": kind_used,
+        "flourish": flourish,
         "copy": copy["twitter"],
         "late_id": "",
         "status": "dry-run",
     }
     if live:
-        payload = late_payload(story, copy, when_s, cfg, media, extra_reddit=extra_reddit)
+        payload = late_payload(
+            story, copy, when_s, cfg, media, extra_reddit=extra_reddit, flourish=flourish
+        )
         idem = f"eagleeye-{story['id']}-{when_s.replace(' ', 'T')}"
         res = create_post(payload, idempotency_key=idem)
         post = res.get("post") or res.get("existingPost") or res
@@ -458,15 +596,17 @@ def run_once(
         result["late_id"] = late_id
         result["status"] = status
         print("LATE       ", late_id, status)
+        result["flourish"] = flourish
         to_addr = cfg.get("report_email") or os.environ.get("REPORT_EMAIL") or "eagleeyegolfapp@gmail.com"
         body = (
             f"EagleEye Golf App — post scheduled\n\n"
             f"When:      {when_s} America/New_York\n"
             f"Lane:      {lane}\n"
+            f"Flourish:  {flourish}\n"
             f"Headline:  {story['headline']}\n"
             f"Video:     {story.get('video_url') or '(image only)'}\n"
             f"Still:     {still}\n"
-            f"Platforms: X, Instagram, Reddit (u_eagleeyegolfapp)\n"
+            f"Formats:   core + {flourish}\n"
             f"Late id:   {late_id}\n"
             f"Status:    {status}\n\n"
             f"Caption:\n{copy['twitter']}\n"
@@ -477,6 +617,7 @@ def run_once(
             print("  email   failed:", e)
     else:
         print("LATE       dry-run")
+        print("FORMATS    core +", flourish)
 
     _RUN_LANES.append(lane)
     keys = story_keys(story)
@@ -492,6 +633,7 @@ def run_once(
             state["used_creators"] = (list(state.get("used_creators") or []) + [who])[-20:]
         state["recent_copy"] = (list(state.get("recent_copy") or []) + [(copy.get("twitter") or "")[:180]])[-12:]
         state["lanes"] = (state.get("lanes") or [])[-20:] + [lane]
+        state["flourishes"] = (list(state.get("flourishes") or []) + [flourish])[-20:]
         state["last"] = result
         if weekly_patch:
             state.update(weekly_patch)

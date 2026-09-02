@@ -27,6 +27,7 @@ permissions:
 jobs:
   post:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: automation
@@ -53,4 +54,5 @@ jobs:
           WHEN: ${{ github.event.inputs.when || '' }}
           LIVE: "true"
           TZ: America/New_York
-        run: python3 run_daily.py --live
+          PYTHONUNBUFFERED: "1"
+        run: python3 -u run_daily.py --live

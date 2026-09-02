@@ -51,6 +51,12 @@
     "community": 60,
     "eagleeye": 0
   },
+  "flourish": {
+    "none": 40,
+    "thread": 25,
+    "story": 20,
+    "poll": 15
+  },
   "media": {
     "require_image": true,
     "prefer_short_video": false,
@@ -1031,7 +1037,7 @@
   ],
   "ends_on": "2026-10-31",
   "max_posts_per_run": 5,
-  "max_runtime_sec": 720,
+  "max_runtime_sec": 900,
   "max_failures_per_run": 2,
   "events": [
     {
