@@ -56,7 +56,7 @@ jobs:
           restore-keys: |
             eagleeye-state-
       - name: Install ffmpeg
-        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg fonts-liberation fonts-liberation2 fonts-dejavu-core
       - name: Install Python deps
         run: pip install -r requirements.txt
       - name: Run → Late
