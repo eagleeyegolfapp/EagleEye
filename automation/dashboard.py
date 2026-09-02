@@ -267,7 +267,7 @@ PAGE = r"""<!doctype html>
       <label>Times · Eastern</label>
       <div id="slots" class="slots"></div>
       <button type="button" class="ghost tiny" id="add_slot" style="margin-top:8px">Add a time</button>
-      <p class="warn">Set a time and the date fills in with the next time that clock hits. Today if it hasn’t passed, otherwise the next posting day.</p>
+      <p class="warn">Each row posts at that date and time, Eastern. It will not move to another day.</p>
       <label>Mix</label>
       <div class="row3">
         <div><label>News</label><input id="mix_news" type="number" min="0" max="100"/></div>
@@ -339,13 +339,6 @@ const daysBox = document.getElementById("days");
 DAYS.forEach((n,i) => {
   daysBox.insertAdjacentHTML("beforeend",
     `<label><input type="checkbox" id="d${i}" data-day="${i}"/> ${n}</label>`);
-});
-daysBox.addEventListener("change", () => {
-  document.querySelectorAll(".slot").forEach(row => {
-    const t = row.querySelector("[data-slot]")?.value;
-    const d = row.querySelector("[data-date]");
-    if (t && d) d.value = nextDateForTime(t);
-  });
 });
 function show(t){ document.getElementById("msg").textContent = t; }
 let busyTimer = null;
@@ -485,14 +478,10 @@ function bindSlotRow(row, info){
   const dateEl = row.querySelector("[data-date]");
   timeEl.addEventListener("change", () => {
     if (!timeEl.value) return;
-    dateEl.value = nextDateForTime(timeEl.value);
+    if (!dateEl.value) dateEl.value = nextDateForTime(timeEl.value);
     paintRowLabel(row, null);
   });
-  timeEl.addEventListener("input", () => {
-    if (!timeEl.value) return;
-    dateEl.value = nextDateForTime(timeEl.value);
-    paintRowLabel(row, null);
-  });
+  timeEl.addEventListener("input", () => paintRowLabel(row, null));
   dateEl.addEventListener("change", () => paintRowLabel(row, null));
 }
 function renderSlots(slots, nextMap){
@@ -533,7 +522,7 @@ async function load(){
   document.getElementById("dot").className = "dot" + (d.enabled || creating ? "" : " off");
   document.getElementById("live_lbl").textContent = creating ? "creating now" : (d.enabled ? "automation on" : "paused");
   const ban = document.getElementById("banner");
-  const nexts = (d.next_fires || []).map(x => x.fire || x.next).filter(Boolean).sort();
+  const nexts = (d.next_fires || []).map(x => x.fire).filter(Boolean).sort();
   document.getElementById("ban_next").textContent = nexts[0] ? ("Next slot  " + nexts[0] + " ET") : "";
   if (creating) {
     ban.className = "banner busy";

@@ -198,55 +198,43 @@ def next_occurrence(
     return dt
 
 
-def slot_next(slot: dict, now: datetime, days: set[int]) -> datetime:
-    """User-set date if it's still ahead; otherwise the next clock hit."""
-    t = slot.get("time") or "09:30"
+def slot_datetime(slot: dict) -> datetime | None:
+    """Exact Eastern datetime from the row. No rolling, no guessing."""
+    t = (slot.get("time") or "").strip()
     raw_d = (slot.get("date") or "").strip()
-    if raw_d:
-        try:
-            hour, minute = parse_hhmm(t)
-            y, mo, d = (int(x) for x in raw_d.split("-"))
-            dt = datetime(y, mo, d, hour, minute, tzinfo=TZ)
-            if dt > now and dt.weekday() in days:
-                return dt
-        except ValueError:
-            pass
-    return next_occurrence(t, now, days)
+    if not t or not raw_d:
+        return None
+    try:
+        hour, minute = parse_hhmm(t)
+        y, mo, d = (int(x) for x in raw_d.split("-"))
+        return datetime(y, mo, d, hour, minute, second=0, microsecond=0, tzinfo=TZ)
+    except ValueError:
+        return None
+
+
+def slot_next(slot: dict, now: datetime, days: set[int]) -> datetime:
+    dt = slot_datetime(slot)
+    if dt is not None:
+        return dt
+    return next_occurrence(slot.get("time") or "09:30", now, days)
 
 
 def slot_preview(cfg: dict) -> list[dict]:
     now = datetime.now(TZ)
     booked = _booked_times()
-    days = posting_days(cfg)
     out = []
     for slot in iter_slots(cfg):
         t = slot["time"]
-        user_dt = None
         raw_d = slot.get("date") or ""
-        if raw_d:
-            try:
-                hour, minute = parse_hhmm(t)
-                y, mo, d = (int(x) for x in raw_d.split("-"))
-                user_dt = datetime(y, mo, d, hour, minute, tzinfo=TZ)
-            except ValueError:
-                user_dt = None
-        dt = slot_next(slot, now, days)
-        for _ in range(14):
-            if dt.weekday() not in days:
-                dt += timedelta(days=1)
-                continue
-            key = dt.strftime("%Y-%m-%d %H:%M")
-            if key not in booked:
-                break
-            dt += timedelta(days=1)
-        user_key = f"{raw_d} {t}" if raw_d else ""
+        user_dt = slot_datetime(slot)
+        key = user_dt.strftime("%Y-%m-%d %H:%M") if user_dt else ""
         out.append(
             {
                 "time": t,
-                "date": raw_d or dt.strftime("%Y-%m-%d"),
-                "next": (f"{raw_d} {t}" if raw_d else dt.strftime("%Y-%m-%d %H:%M")),
-                "fire": dt.strftime("%Y-%m-%d %H:%M"),
-                "booked": bool(user_key and user_key in booked),
+                "date": raw_d,
+                "next": key or f"{raw_d} {t}".strip(),
+                "fire": key if user_dt and user_dt > now and key not in booked else None,
+                "booked": bool(key and key in booked),
                 "past": bool(user_dt and user_dt <= now),
             }
         )
@@ -290,13 +278,22 @@ def remaining_slots(cfg: dict, override: str | None, one: bool = False) -> list[
     days = posting_days(cfg)
     upcoming: list[datetime] = []
     for slot in iter_slots(cfg):
-        dt = slot_next(slot, now, days)
-        for _ in range(14):
-            key = dt.strftime("%Y-%m-%d %H:%M")
-            if key not in booked and dt.weekday() in days:
-                upcoming.append(dt)
-                break
-            dt = dt + timedelta(days=1)
+        dt = slot_datetime(slot)
+        if dt is None:
+            dt = next_occurrence(slot["time"], now, days)
+            for _ in range(14):
+                key = dt.strftime("%Y-%m-%d %H:%M")
+                if key not in booked and dt.weekday() in days:
+                    upcoming.append(dt)
+                    break
+                dt += timedelta(days=1)
+            continue
+        if dt <= now:
+            continue
+        key = dt.strftime("%Y-%m-%d %H:%M")
+        if key in booked:
+            continue
+        upcoming.append(dt)
     upcoming.sort()
     if not upcoming:
         return []
