@@ -14,7 +14,8 @@ from captions import write_copy
 from late_client import create_post, persist_ids, resolve_accounts
 from mailer import send_report
 from media import download
-from real_media import fit_ig_portrait, official_still, save_preview
+from ig_visual import build_ig_pack
+from real_media import official_still
 from research import active_events, fetch_link_story, research_community, research_news
 from story_quality import story_keys, x_status_id
 from workflow_one import load_config
@@ -544,26 +545,53 @@ def instagram_payload(
     copy: dict,
     when: str,
     cfg: dict,
-    still: str,
+    media_urls: list[str],
 ) -> dict | None:
-    """IG-only job. Official thumbnail of this clip/article — never a generated card."""
+    """IG feed or carousel. Real frame + original type."""
     acc = os.environ.get("LATE_INSTAGRAM_ACCOUNT_ID", "")
-    if not acc or not still:
+    urls = [u for u in (media_urls or []) if u]
+    if not acc or not urls:
         return None
-    print("  instagram feed (official still)")
+    kind = "carousel" if len(urls) > 1 else "feed"
+    print(f"  instagram {kind} {len(urls)} image(s)")
+    cap = copy.get("instagram") or copy.get("twitter") or ""
     payload = _base_late(copy, when, cfg, " · IG")
-    payload["content"] = copy.get("instagram") or copy.get("twitter") or ""
-    payload["mediaItems"] = [{"url": still, "type": "image"}]
+    payload["content"] = cap
+    payload["mediaItems"] = [{"url": u, "type": "image"} for u in urls]
     payload["platforms"] = [
         {
             "platform": "instagram",
             "accountId": acc,
-            "customContent": copy.get("instagram") or copy.get("twitter") or "",
+            "customContent": cap,
             "platformSpecificData": {
                 "firstComment": copy.get("instagram_first_comment")
                 or copy.get("ig_first_comment")
                 or "",
             },
+        }
+    ]
+    return payload
+
+
+def instagram_story_payload(
+    copy: dict,
+    when: str,
+    cfg: dict,
+    story_url: str,
+) -> dict | None:
+    acc = os.environ.get("LATE_INSTAGRAM_ACCOUNT_ID", "")
+    if not acc or not story_url:
+        return None
+    print("  instagram story")
+    payload = _base_late(copy, when, cfg, " · IG story")
+    payload["content"] = ""
+    payload["mediaItems"] = [{"url": story_url, "type": "image"}]
+    payload["platforms"] = [
+        {
+            "platform": "instagram",
+            "accountId": acc,
+            "customContent": "",
+            "platformSpecificData": {"contentType": "story"},
         }
     ]
     return payload
@@ -757,24 +785,36 @@ def run_once(
     if not official:
         raise SystemExit("No official clip or article URL — will not invent footage.")
     still_info = official_still(story)
-    still = ""
-    ig_bytes: bytes | None = None
-    if still_info:
-        ig_bytes = fit_ig_portrait(still_info["bytes"])
-        out_dir = HERE / "out" / "stills"
-        save_preview(ig_bytes, out_dir / f"{story.get('id', 'still')}.jpg")
-        print("VISUAL     official still ·", still_info.get("kind"))
+    ig_pack = None
+    if still_info and still_info.get("bytes"):
+        ig_pack = build_ig_pack(
+            still_info["bytes"],
+            copy,
+            story,
+            flourish=flourish,
+            last_styles=list(state.get("ig_styles") or []),
+        )
+        if ig_pack:
+            print("VISUAL     IG", ig_pack["style"], "·", still_info.get("kind"))
+        else:
+            print("VISUAL     IG skipped (weak frame) — X/Reddit still go")
     else:
-        print("VISUAL     none — X/Reddit will still unfurl the official URL")
+        print("VISUAL     no official frame — X/Reddit still unfurl")
+    hosted_slides: list[str] = []
+    hosted_story = ""
     if live:
         found = resolve_accounts()
         persist_ids(found)
-        if ig_bytes:
+        if ig_pack:
             try:
-                still = host_bytes(ig_bytes, story["id"] + "-still")
+                for i, blob in enumerate(ig_pack["slides"]):
+                    hosted_slides.append(host_bytes(blob, f"{story['id']}-ig{i+1}"))
+                if ig_pack.get("story"):
+                    hosted_story = host_bytes(ig_pack["story"], f"{story['id']}-igstory")
             except Exception as e:  # noqa: BLE001
-                print("  media   still host failed:", e)
-                still = ""
+                print("  media   IG host failed:", e)
+                hosted_slides, hosted_story = [], ""
+    still = (hosted_slides[0] if hosted_slides else "") or ((still_info or {}).get("url") or "")
     quote_id = str(story.get("x_status_id") or x_status_id(official) or "")
     yid_like = "youtube" in official or "youtu.be" in official or "vimeo.com" in official
     x_like = bool(quote_id) or "x.com/" in official or "twitter.com/" in official
@@ -786,7 +826,7 @@ def run_once(
         kind_used = "official-link"
     print("HEADLINE  ", story["headline"])
     print("SOURCE    ", official, "short=" + str(bool(story.get("is_short"))))
-    print("IG STILL  ", still or still_info.get("url") if still_info else "(none — skip IG)")
+    print("IG        ", (ig_pack or {}).get("style") or "skip", still or "")
     print("PACKAGED  ", kind_used)
     print("X CHARS   ", copy["twitter_chars"])
     print("X COPY    ", copy["twitter"].replace("\n", " / "))
@@ -801,6 +841,7 @@ def run_once(
         "video_url": official,
         "still": still or ((still_info or {}).get("url") or ""),
         "photo_credit": (still_info or {}).get("kind") or "",
+        "ig_style": (ig_pack or {}).get("style") or "",
         "packaged": kind_used,
         "flourish": flourish,
         "copy": copy["twitter"],
@@ -817,9 +858,15 @@ def run_once(
         )
         ig_id = submit_late(
             "instagram",
-            instagram_payload(copy, when_s, cfg, still),
+            instagram_payload(copy, when_s, cfg, hosted_slides),
             f"eagleeye-ig-{story['id']}-{stamp}",
         )
+        if hosted_story:
+            submit_late(
+                "instagram-story",
+                instagram_story_payload(copy, when_s, cfg, hosted_story),
+                f"eagleeye-igs-{story['id']}-{stamp}",
+            )
         rd_id = submit_late(
             "reddit",
             reddit_payload(copy, when_s, cfg, official, extra_reddit),
@@ -838,7 +885,7 @@ def run_once(
             f"When:      {when_s} America/New_York\n"
             f"Lane:      {lane}\n"
             f"X:         quote/embed official video so it autoplays\n"
-            f"Instagram: official thumbnail of that same clip\n"
+            f"Instagram: {(ig_pack or {}).get('style') or 'skipped'}\n"
             f"Reddit:    official link\n"
             f"Headline:  {story['headline']}\n"
             f"Source:    {official}\n"
@@ -855,7 +902,7 @@ def run_once(
             print("  email   failed:", e)
     else:
         print("LATE       dry-run")
-        print("FORMATS    X quote/embed autoplay + IG official still + Reddit link")
+        print("FORMATS    X embed + IG", (ig_pack or {}).get("style") or "skip", "+ Reddit link")
 
     _RUN_LANES.append(lane)
     keys = story_keys(story)
@@ -872,11 +919,15 @@ def run_once(
         state["recent_copy"] = (list(state.get("recent_copy") or []) + [(copy.get("twitter") or "")[:180]])[-12:]
         state["lanes"] = (state.get("lanes") or [])[-20:] + [lane]
         state["flourishes"] = (list(state.get("flourishes") or []) + [flourish])[-20:]
+        if ig_pack and ig_pack.get("style"):
+            state["ig_styles"] = (list(state.get("ig_styles") or []) + [ig_pack["style"]])[-12:]
         state["last"] = result
         if weekly_patch:
             state.update(weekly_patch)
     else:
         state["lanes"] = (state.get("lanes") or [])[-20:] + [lane]
+        if ig_pack and ig_pack.get("style"):
+            state["ig_styles"] = (list(state.get("ig_styles") or []) + [ig_pack["style"]])[-12:]
         state["last"] = result
     save_state(state)
     log = HERE / "logs" / "posts.csv"

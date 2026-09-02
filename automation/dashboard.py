@@ -319,9 +319,9 @@ PAGE = r"""<!doctype html>
       <section class="card" style="margin-bottom:22px">
         <h2>How a post is built</h2>
         <div class="pipe">
-          <div class="step"><div class="num">1</div><div><b>Prefer video already on X</b><small>Official native videos. The tweet includes their status URL so X embeds the player.</small></div></div>
-          <div class="step"><div class="num">2</div><div><b>YouTube if no X video</b><small>Then we unfurl the official YouTube URL. Never rip, never AI footage.</small></div></div>
-          <div class="step"><div class="num">3</div><div><b>IG gets that same frame</b><small>The official video thumbnail. Skip IG if we don't have a real still.</small></div></div>
+          <div class="step"><div class="num">1</div><div><b>X + Reddit keep the clip</b><small>Official video URL on X. Link post on Reddit. Never ripped.</small></div></div>
+          <div class="step"><div class="num">2</div><div><b>Instagram is a magazine</b><small>Seven layouts rotate so the grid never repeats: cover, broadcast, split, scorebug, editorial, clean, argument carousel. Short hook on the real frame — never a naked thumb.</small></div></div>
+          <div class="step"><div class="num">3</div><div><b>Skip junk thumbs</b><small>No end cards, no letterbox, no play-button garbage. Weak frames go to X/Reddit only.</small></div></div>
         </div>
       </section>
       <section class="card">

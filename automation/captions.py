@@ -36,12 +36,14 @@ Rules:
 - X single tweet (twitter): under 200 characters. No URL.
 - X thread (twitter_thread): array of exactly 3 tweets. 1 = hook. 2 = the take. 3 = a specific question golfers will fight about. Each under 200 characters. No URLs.
 - X poll: poll_question is the question (under 180 chars, no URL). poll_options is 3 or 4 answers, EACH 25 characters max, punchy, no emoji.
-- Instagram: 2-4 short lines. Same take. People are looking at the official thumbnail of that clip.
+- Instagram caption: 2-4 short lines. The photo already has overlay_hook burned on it, so the caption is the rest of the take plus the fight question. Do not repeat overlay_hook word for word.
+- overlay_hook: 4-8 words that sit ON the Instagram photo. A magazine cover line. Not a full sentence. No source/creator name. No URL. No emoji. Punch. Examples: "Scottie is not like us" / "That's a captain's pick" / "The room just got quiet"
+- overlay_question: under 60 characters. The fight golfers will reply to. Empty string if this post has no question.
 - Reddit title: debate hook, under 80 characters, no emoji dump.
 - Reddit body: 1-2 sentences. Do not paste the URL; the system appends it.
 - ig_first_comment: ONLY Watch/Read links if we pass them. No recap.
 
-Return JSON only with keys: twitter, twitter_thread, poll_question, poll_options, instagram, reddit_title, reddit_body, ig_first_comment."""
+Return JSON only with keys: twitter, twitter_thread, poll_question, poll_options, instagram, overlay_hook, overlay_question, reddit_title, reddit_body, ig_first_comment."""
 
 
 def _chat(prompt: str) -> str | None:
@@ -119,12 +121,18 @@ def fallback(story: dict, ask: bool = False) -> dict:
         ]
         poll_q = "Right call?"
         poll_opts = ["Yes", "No", "Too soon", "Who cares"]
+    hook_src = re.sub(r"https?://\S+", "", twitter)
+    hook_src = re.sub(r"\s+", " ", hook_src).strip()
+    overlay_hook = " ".join(hook_src.split()[:7]).rstrip(".!,") or headline[:48]
+    overlay_q = poll_q if ask else ""
     return {
         "twitter": twitter,
         "twitter_thread": thread,
         "poll_question": poll_q,
         "poll_options": poll_opts,
         "instagram": ig,
+        "overlay_hook": overlay_hook,
+        "overlay_question": overlay_q,
         "reddit_title": reddit_title,
         "reddit_body": reddit_body,
         "ig_first_comment": comment,
@@ -200,7 +208,16 @@ def write_copy(
     parsed = _parse_json(_chat(user) or "")
     base = fallback(story, ask=ask)
     if parsed:
-        for k in ("twitter", "instagram", "reddit_title", "reddit_body", "ig_first_comment", "poll_question"):
+        for k in (
+            "twitter",
+            "instagram",
+            "reddit_title",
+            "reddit_body",
+            "ig_first_comment",
+            "poll_question",
+            "overlay_hook",
+            "overlay_question",
+        ):
             if parsed.get(k):
                 base[k] = str(parsed[k]).strip()
         if parsed.get("reddit_title"):
@@ -279,6 +296,22 @@ def write_copy(
         ln for ln in ig_cap.splitlines() if not ln.lower().startswith("photo:")
     ).strip()
     base["instagram"] = ig_cap
+    hook = re.sub(r"https?://\S+", "", (base.get("overlay_hook") or "")).strip()
+    hook = re.sub(r"\s+", " ", hook)
+    if not hook:
+        hook = re.sub(r"https?://\S+", "", ig_cap or base.get("twitter") or "").strip()
+        hook = re.sub(r"\s+", " ", hook)
+        hook = " ".join(hook.split()[:7]).rstrip(".!,")
+    if len(hook.split()) > 8:
+        hook = " ".join(hook.split()[:8])
+    if len(hook) > 52:
+        hook = hook[:50].rsplit(" ", 1)[0]
+    base["overlay_hook"] = hook
+    oq = re.sub(r"https?://\S+", "", (base.get("overlay_question") or "")).strip()
+    oq = re.sub(r"\s+", " ", oq)
+    if len(oq) > 64:
+        oq = oq[:61].rsplit(" ", 1)[0].rstrip("?.,") + "?"
+    base["overlay_question"] = oq
     base["reddit"] = base.get("reddit_body") or base["title"]
     base["title"] = (base.get("title") or base.get("reddit_title") or story.get("headline") or "golf")[:80]
     base["twitter_chars"] = twitter_len(base["twitter"])
