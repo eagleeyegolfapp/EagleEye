@@ -167,7 +167,7 @@ def score_candidate(
         return rec
     hook = 10.0 if any(h in (title or "").lower() for h in HOOKY) else 0.0
     short_b = 14.0 if is_short else 0.0
-    embed_b = 8.0 if has_embed else 0.0
+    embed_b = 18.0 if has_embed else 0.0
     repeat = -32.0 if creator_repeat else 0.0
     base = float(max(1, int(weight or 3))) * 3.0
     event = float(event_boost)

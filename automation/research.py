@@ -148,6 +148,7 @@ def youtube_rss(channel_id: str) -> list[dict]:
         group = entry.find(f"{MRSS}group")
         duration = 0
         desc = ""
+        thumb = ""
         if group is not None:
             desc = (group.findtext(f"{MRSS}description") or "").strip()[:400]
             content = group.find(f"{MRSS}content")
@@ -156,6 +157,9 @@ def youtube_rss(channel_id: str) -> list[dict]:
                     duration = int(float(content.get("duration") or 0))
                 except ValueError:
                     duration = 0
+            tn = group.find(f"{MRSS}thumbnail")
+            if tn is not None:
+                thumb = (tn.get("url") or "").strip()
         is_short = 0 < duration <= 90
         video_url = (
             f"https://www.youtube.com/shorts/{vid}"
@@ -172,6 +176,7 @@ def youtube_rss(channel_id: str) -> list[dict]:
                 "excerpt": desc,
                 "duration": duration,
                 "is_short": is_short,
+                "thumb": thumb or f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
             }
         )
     _YT_CACHE[channel_id] = out
@@ -238,7 +243,7 @@ def fetch_link_story(url: str, cfg: dict | None = None) -> dict:
         "is_short": is_short,
         "x_handle": x_handle,
         "ig_handle": ig_handle,
-        "thumb": thumb,
+        "thumb": thumb or (f"https://i.ytimg.com/vi/{yid}/hqdefault.jpg" if yid else ""),
         "still_prompt": f"golf, related to: {title[:80]}, no famous faces, no logos",
     }
 
@@ -373,6 +378,16 @@ def parse_rss(url: str) -> list[dict]:
         raw_desc = child("description") or child("summary")
         desc = re.sub(r"<[^>]+>", " ", raw_desc or "")
         desc = re.sub(r"\s+", " ", desc).strip()[:400]
+        thumb = ""
+        for ch in item:
+            t = ch.tag.lower().split("}")[-1]
+            if t in {"thumbnail", "image"} and (ch.get("url") or ch.get("href") or (ch.text or "").strip()):
+                thumb = (ch.get("url") or ch.get("href") or (ch.text or "")).strip() or thumb
+            if t in {"content", "enclosure"}:
+                ctype = (ch.get("type") or ch.get("medium") or "").lower()
+                href = (ch.get("url") or "").strip()
+                if href and ("image" in ctype or href.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))):
+                    thumb = href
         items.append(
             {
                 "title": title[:180],
@@ -380,6 +395,7 @@ def parse_rss(url: str) -> list[dict]:
                 "source": url,
                 "excerpt": desc,
                 "published": child("pubDate") or child("published") or child("updated"),
+                "thumb": thumb,
             }
         )
         if len(items) >= 8:
@@ -524,9 +540,8 @@ def _community_story(picked: dict, meta: dict) -> dict:
         "is_short": bool(picked.get("is_short")),
         "x_handle": (meta or {}).get("x_handle") or (meta or {}).get("handle") or "",
         "ig_handle": (meta or {}).get("ig_handle") or "",
-        "still_prompt": (
-            "Photoreal weekend golf, friends' bags by a cart, late sun, "
-            "no faces, no famous players, no YouTube UI."
+        "thumb": picked.get("thumb") or (
+            f"https://i.ytimg.com/vi/{sid}/hqdefault.jpg" if prefix == "yt" else ""
         ),
     }
 
@@ -565,12 +580,16 @@ def research_news(
                 event_boost=title_event_boost(title, cfg),
                 is_short="/shorts/" in (page_url or ""),
                 creator_repeat=(src["name"] or "").lower() in used_cre,
-                has_embed=bool(page_url),
+                has_embed=any(
+                    h in (page_url or "")
+                    for h in ("youtu", "vimeo.com", "x.com/", "twitter.com/")
+                ),
                 lane="news",
             )
             cand = {
                 **blob,
                 "excerpt": item.get("excerpt") or "",
+                "thumb": item.get("thumb") or "",
                 "source": src,
                 "kind": "rss",
             }
@@ -610,6 +629,7 @@ def research_news(
                 "published": vid.get("published") or "",
                 "is_short": bool(vid.get("is_short")),
                 "channel": vid.get("channel") or src["name"],
+                "thumb": vid.get("thumb") or "",
                 "kind": "yt",
                 "source": src,
             }
@@ -651,10 +671,7 @@ def research_news(
         "is_short": bool(picked.get("is_short")) or "/shorts/" in (video or ""),
         "x_handle": (src.get("x_handle") or "").lstrip("@"),
         "ig_handle": (src.get("ig_handle") or "").lstrip("@"),
-        "still_prompt": (
-            "Photoreal empty championship golf hole at dusk, grandstand silhouette "
-            "in the distance, flagstick, no people, no TV logos."
-        ),
+        "thumb": picked.get("thumb") or (f"https://i.ytimg.com/vi/{yid}/hqdefault.jpg" if yid else ""),
     }
 
 

@@ -247,8 +247,8 @@ PAGE = r"""<!doctype html>
       <div class="steps">
         <div class="st" id="st_research"><span class="b"></span><span>Finding a live golf clip</span></div>
         <div class="st" id="st_copy"><span class="b"></span><span>Writing the take</span></div>
-        <div class="st" id="st_photo"><span class="b"></span><span>Building the autoplay video</span></div>
-        <div class="st" id="st_pack"><span class="b"></span><span>Packaging X · IG Reels · Reddit</span></div>
+        <div class="st" id="st_photo"><span class="b"></span><span>Grabbing the official thumbnail</span></div>
+        <div class="st" id="st_pack"><span class="b"></span><span>Packaging X · IG · Reddit</span></div>
         <div class="st" id="st_late"><span class="b"></span><span>Sending to Late</span></div>
       </div>
       <div class="log" id="ov_log">Starting…</div>
@@ -317,9 +317,9 @@ PAGE = r"""<!doctype html>
       <section class="card" style="margin-bottom:22px">
         <h2>How a post is built</h2>
         <div class="pipe">
-          <div class="step"><div class="num">1</div><div><b>Real clip or article</b><small>We react to official YouTube / news. We never rip and re-upload someone else's file.</small></div></div>
-          <div class="step"><div class="num">2</div><div><b>X + IG autoplay</b><small>Original 9:16 take video. Muted autoplay in the feed — they never have to leave X or Instagram.</small></div></div>
-          <div class="step"><div class="num">3</div><div><b>Reddit gets the source</b><small>Official link post, separate from X/IG so a Reddit rate-limit cannot kill the slot.</small></div></div>
+          <div class="step"><div class="num">1</div><div><b>Real clip or article</b><small>Official YouTube, Shorts, Vimeo, or X. Linked, never ripped, never AI-generated.</small></div></div>
+          <div class="step"><div class="num">2</div><div><b>X unfurls the real clip</b><small>The take + the official URL. X shows their player/thumbnail. We attach no fake media.</small></div></div>
+          <div class="step"><div class="num">3</div><div><b>IG gets that same frame</b><small>The official YouTube thumbnail or the article's own photo. Skip IG if we don't have it.</small></div></div>
         </div>
       </section>
       <section class="card">
@@ -367,8 +367,8 @@ function paintSteps(text){
     else if (cond && el.className !== "st done") el.className = "st on";
   };
   mark("st_research", /lane|community|news pick|spotlight|finding/.test(t), /headline|embed/.test(t));
-  mark("st_copy", /x copy|x chars|headline|grok/.test(t), /visual|autoplay|take card|packaged/.test(t));
-  mark("st_photo", /visual|autoplay|ffmpeg|take card|take video/.test(t), /packaged|reddit|twitter/.test(t));
+  mark("st_copy", /x copy|x chars|headline|grok/.test(t), /visual|official still|packaged/.test(t));
+  mark("st_photo", /visual|official still|ytimg|og:image/.test(t), /packaged|reddit|twitter/.test(t));
   mark("st_pack", /packaged|reddit|twitter|instagram|source/.test(t), /\blate\b/.test(t));
   mark("st_late", /\blate\b/.test(t), /scheduled|published|submitted/.test(t));
 }
@@ -447,7 +447,7 @@ async function load(){
   if (creating) {
     ban.className = "banner busy";
     document.getElementById("ban_who").textContent = "CREATING A POST";
-    document.getElementById("ban_sub").textContent = "Research → take → autoplay video → Late. Leave this open until it finishes.";
+    document.getElementById("ban_sub").textContent = "Research → take → official thumbnail → Late. Leave this open until it finishes.";
   } else if (d.enabled) {
     ban.className = "banner armed";
     document.getElementById("ban_who").textContent = "ARMED";
@@ -488,7 +488,7 @@ async function load(){
   const ch = (d.community_channels||[]).map(c => `${c.name} | ${c.youtube_id}`).join("\n");
   document.getElementById("channels").value = ch;
   document.getElementById("status").textContent = d.enabled
-    ? "GitHub fills every remaining slot. Late publishes. X and Instagram get a native autoplay take video. Reddit gets the official link."
+    ? "GitHub fills every remaining slot. Late publishes. X unfurls the official clip. Instagram gets that clip's real thumbnail."
     : "Paused. Nothing posts until you turn it on and save.";
   const last = d.last;
   const prev = document.getElementById("prev");

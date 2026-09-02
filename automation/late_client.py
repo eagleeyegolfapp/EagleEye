@@ -169,6 +169,10 @@ def presign_and_upload(blob: bytes, filename: str, content_type: str = "image/jp
     return public_url
 
 
+def delete_post(post_id: str) -> dict:
+    return request("DELETE", f"/posts/{post_id}")
+
+
 def list_posts(status: str | None = None, search: str | None = None, limit: int = 20) -> list[dict]:
     q = [f"limit={limit}"]
     if status:

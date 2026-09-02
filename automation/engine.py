@@ -13,8 +13,8 @@ from zoneinfo import ZoneInfo
 from captions import write_copy
 from late_client import create_post, persist_ids, resolve_accounts
 from mailer import send_report
-from quote_card import render_quote_card
 from media import download
+from real_media import fit_ig_portrait, official_still, save_preview
 from research import active_events, fetch_link_story, research_community, research_news
 from story_quality import story_keys
 from workflow_one import load_config
@@ -320,39 +320,41 @@ def twitter_payload(
     copy: dict,
     when: str,
     cfg: dict,
-    video: str,
-    still: str,
+    official: str,
     flourish: str,
 ) -> dict | None:
-    """X-only job. Native video autoplays in the feed. No YouTube URL on the tweet."""
+    """X-only job. No attached media — the official URL unfurls the real clip."""
     acc = os.environ.get("LATE_TWITTER_ACCOUNT_ID", "")
     if not acc:
         return None
-    hook = _strip_urls(copy.get("twitter") or "")
-    item: dict = {"platform": "twitter", "accountId": acc, "customContent": hook}
-    # Polls cannot ship with native video. Video wins.
+    tweet = (copy.get("twitter") or "").strip()
+    if official and official not in tweet:
+        hook = _strip_urls(tweet)
+        tweet = f"{hook}\n\n{official}".strip()
+    item: dict = {"platform": "twitter", "accountId": acc, "customContent": tweet}
     if flourish == "thread":
-        thread = [_strip_urls(t) for t in (copy.get("twitter_thread") or []) if str(t).strip()]
-        thread = [t for t in thread if t][:4]
+        thread = [t for t in (copy.get("twitter_thread") or []) if str(t).strip()][:4]
         if len(thread) >= 2:
             item["platformSpecificData"] = {"threadItems": [{"content": t} for t in thread]}
             item["customContent"] = thread[0]
-            print("  twitter  thread + autoplay", len(thread), "tweets")
+            print("  twitter  thread + official unfurl", len(thread), "tweets")
         else:
-            print("  twitter  single + autoplay")
+            print("  twitter  single + official unfurl")
+    elif flourish == "poll":
+        q = _strip_urls(copy.get("poll_question") or copy.get("twitter") or "")
+        opts = [str(o).strip()[:25] for o in (copy.get("poll_options") or []) if str(o).strip()][:4]
+        if q and len(opts) >= 2 and not official:
+            item["customContent"] = q
+            item["platformSpecificData"] = {"poll": {"options": opts, "duration_minutes": 1440}}
+            print("  twitter  poll", q[:50])
+        else:
+            print("  twitter  poll skipped — official clip unfurl wins")
+            print("  twitter  single + official unfurl")
     else:
-        if flourish == "poll":
-            print("  twitter  poll skipped — native video autoplays instead")
-        print("  twitter  single + autoplay")
+        print("  twitter  single + official unfurl")
     payload = _base_late(copy, when, cfg)
     payload["content"] = item["customContent"]
     payload["platforms"] = [item]
-    if video:
-        payload["mediaItems"] = [{"url": video, "type": "video"}]
-    elif still:
-        payload["mediaItems"] = [{"url": still, "type": "image"}]
-    else:
-        return None
     return payload
 
 
@@ -403,39 +405,26 @@ def instagram_payload(
     copy: dict,
     when: str,
     cfg: dict,
-    video: str,
     still: str,
-    flourish: str,
 ) -> dict | None:
-    """IG-only job. A video becomes a Reel and autoplays in the feed."""
+    """IG-only job. Official thumbnail of this clip/article — never a generated card."""
     acc = os.environ.get("LATE_INSTAGRAM_ACCOUNT_ID", "")
-    if not acc:
+    if not acc or not still:
         return None
-    if not video and not still:
-        return None
-    psd: dict = {
-        "firstComment": copy.get("instagram_first_comment")
-        or copy.get("ig_first_comment")
-        or "",
-    }
-    if video:
-        media = [{"url": video, "type": "video"}]
-        if still:
-            media[0]["instagramThumbnail"] = still
-        psd["shareToFeed"] = True
-        print("  instagram reel (autoplay)")
-    else:
-        media = [{"url": still, "type": "image"}]
-        print("  instagram feed still")
+    print("  instagram feed (official still)")
     payload = _base_late(copy, when, cfg, " · IG")
     payload["content"] = copy.get("instagram") or copy.get("twitter") or ""
-    payload["mediaItems"] = media
+    payload["mediaItems"] = [{"url": still, "type": "image"}]
     payload["platforms"] = [
         {
             "platform": "instagram",
             "accountId": acc,
             "customContent": copy.get("instagram") or copy.get("twitter") or "",
-            "platformSpecificData": psd,
+            "platformSpecificData": {
+                "firstComment": copy.get("instagram_first_comment")
+                or copy.get("ig_first_comment")
+                or "",
+            },
         }
     ]
     return payload
@@ -603,46 +592,37 @@ def run_once(
         recent_takes=(state.get("recent_copy") or []) + _RUN_COPY,
     )
     _RUN_COPY.append((copy.get("twitter") or "")[:180])
-    out_dir = HERE / "out" / "cards"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    card_bytes = render_quote_card(copy, story)
-    (out_dir / f"{story.get('id', 'card')}.jpg").write_bytes(card_bytes)
-    video_bytes: bytes | None = None
-    try:
-        from motion import render_take_video
-
-        vpath = out_dir / f"{story.get('id', 'card')}.mp4"
-        render_take_video(copy, story, vpath)
-        video_bytes = vpath.read_bytes()
-        print("VISUAL     autoplay take video")
-    except Exception as e:  # noqa: BLE001
-        print("  video   failed, still-only:", e)
-        print("VISUAL     take card (no motion)")
     official = story.get("video_url") or story.get("article_url") or ""
+    if not official:
+        raise SystemExit("No official clip or article URL — will not invent footage.")
+    still_info = official_still(story)
     still = ""
-    hosted_video = ""
+    ig_bytes: bytes | None = None
+    if still_info:
+        ig_bytes = fit_ig_portrait(still_info["bytes"])
+        out_dir = HERE / "out" / "stills"
+        save_preview(ig_bytes, out_dir / f"{story.get('id', 'still')}.jpg")
+        print("VISUAL     official still ·", still_info.get("kind"))
+    else:
+        print("VISUAL     none — X/Reddit will still unfurl the official URL")
     if live:
         found = resolve_accounts()
         persist_ids(found)
-        try:
-            still = host_bytes(card_bytes, story["id"] + "-card")
-        except Exception as e:  # noqa: BLE001
-            print("  media   still host failed:", e)
-            still = host_bytes(render_quote_card(copy, story), story["id"] + "-card2")
-        if video_bytes:
+        if ig_bytes:
             try:
-                hosted_video = host_bytes(video_bytes, story["id"] + "-vid", "video/mp4")
+                still = host_bytes(ig_bytes, story["id"] + "-still")
             except Exception as e:  # noqa: BLE001
-                print("  media   video host failed:", e)
-        if not still and not hosted_video:
-            raise SystemExit("Need a Late-hosted take card or video.")
-    if hosted_video or video_bytes:
-        kind_used = "take-video"
+                print("  media   still host failed:", e)
+                still = ""
+    yid_like = "youtube" in official or "youtu.be" in official or "vimeo.com" in official
+    x_like = "x.com/" in official or "twitter.com/" in official
+    if yid_like or x_like:
+        kind_used = "official-video"
     else:
-        kind_used = "take-card"
+        kind_used = "official-link"
     print("HEADLINE  ", story["headline"])
-    print("SOURCE    ", official or "(none)", "short=" + str(bool(story.get("is_short"))))
-    print("X/IG      ", "autoplay mp4" if (hosted_video or video_bytes) else "take card")
+    print("SOURCE    ", official, "short=" + str(bool(story.get("is_short"))))
+    print("IG STILL  ", still or still_info.get("url") if still_info else "(none — skip IG)")
     print("PACKAGED  ", kind_used)
     print("X CHARS   ", copy["twitter_chars"])
     print("X COPY    ", copy["twitter"].replace("\n", " / "))
@@ -655,8 +635,8 @@ def run_once(
         "when": when_s,
         "headline": story["headline"],
         "video_url": official,
-        "still": still or hosted_video,
-        "photo_credit": "",
+        "still": still or ((still_info or {}).get("url") or ""),
+        "photo_credit": (still_info or {}).get("kind") or "",
         "packaged": kind_used,
         "flourish": flourish,
         "copy": copy["twitter"],
@@ -667,12 +647,12 @@ def run_once(
         stamp = when_s.replace(" ", "T")
         x_id = submit_late(
             "twitter",
-            twitter_payload(copy, when_s, cfg, hosted_video, still, flourish),
+            twitter_payload(copy, when_s, cfg, official, flourish),
             f"eagleeye-x-{story['id']}-{stamp}",
         )
         ig_id = submit_late(
             "instagram",
-            instagram_payload(copy, when_s, cfg, hosted_video, still, flourish),
+            instagram_payload(copy, when_s, cfg, still),
             f"eagleeye-ig-{story['id']}-{stamp}",
         )
         rd_id = submit_late(
@@ -692,11 +672,12 @@ def run_once(
             f"EagleEye Golf App — post scheduled\n\n"
             f"When:      {when_s} America/New_York\n"
             f"Lane:      {lane}\n"
-            f"X/IG:      native autoplay take video\n"
-            f"Reddit:    official link (separate job)\n"
+            f"X:         official clip unfurl (no generated media)\n"
+            f"Instagram: official thumbnail of that same clip\n"
+            f"Reddit:    official link\n"
             f"Headline:  {story['headline']}\n"
-            f"Source:    {story.get('video_url') or '(none)'}\n"
-            f"Video:     {hosted_video or '(still only)'}\n"
+            f"Source:    {official}\n"
+            f"Still:     {still or '(none)'}\n"
             f"X id:      {x_id or '(none)'}\n"
             f"IG id:     {ig_id or '(none)'}\n"
             f"Reddit id: {rd_id or '(skipped)'}\n"
@@ -709,7 +690,7 @@ def run_once(
             print("  email   failed:", e)
     else:
         print("LATE       dry-run")
-        print("FORMATS    X/IG autoplay + Reddit link")
+        print("FORMATS    X unfurl + IG official still + Reddit link")
 
     _RUN_LANES.append(lane)
     keys = story_keys(story)

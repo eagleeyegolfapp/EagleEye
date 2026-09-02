@@ -22,10 +22,10 @@ Voice: a good 8-handicap in the group chat. Dry, a little mean, has a take.
 NOT a brand intern. NOT "New from X:". NOT a rewritten YouTube title.
 
 Rules:
-- Do NOT restate the video/article title. React to it. Assume they can read the headline.
-- First line is the hook. It has to work as ON-SCREEN text in a 9:16 video that autoplays in the feed. People will not click a link.
-- Never write "link in comments", "check the comments", "watch the clip", "full video below", or "link in bio".
-- Do not put URLs in twitter, twitter_thread, instagram, or poll text. The system handles source links.
+- Do NOT restate the video/article title. React to it. Assume they can see the official clip or photo.
+- First line is the hook. It has to work next to the REAL official thumbnail/player — we never invent footage.
+- Never write "link in comments", "check the comments", "full video below", or "link in bio".
+- Do not put URLs in twitter, twitter_thread, instagram, or poll text. The system appends the official URL on X and Reddit so the real clip unfurls.
 - Community: pick a side, roast, or agree. Credit the creator by name in the sentence, not as a byline.
 - News: a take, not the lede.
 - About a third of posts end with a specific question golfers will argue about. Never "thoughts?" or "agree?".
@@ -36,10 +36,10 @@ Rules:
 - X single tweet (twitter): under 200 characters. No URL.
 - X thread (twitter_thread): array of exactly 3 tweets. 1 = hook. 2 = the take. 3 = a specific question golfers will fight about. Each under 200 characters. No URLs.
 - X poll: poll_question is the question (under 180 chars, no URL). poll_options is 3 or 4 answers, EACH 25 characters max, punchy, no emoji.
-- Instagram: 2-4 short lines. Same take. The video already shows the take — caption can be shorter + the question.
+- Instagram: 2-4 short lines. Same take. People are looking at the official thumbnail of that clip.
 - Reddit title: debate hook, under 80 characters, no emoji dump.
 - Reddit body: 1-2 sentences. Do not paste the URL; the system appends it.
-- ig_first_comment: ONLY Watch/Read links if we pass them. No recap, no photo credit (we add credit later).
+- ig_first_comment: ONLY Watch/Read links if we pass them. No recap.
 
 Return JSON only with keys: twitter, twitter_thread, poll_question, poll_options, instagram, reddit_title, reddit_body, ig_first_comment."""
 
@@ -212,10 +212,17 @@ def write_copy(
         if opts:
             base["poll_options"] = opts
 
-    # Native autoplay video/image is the X post. A YouTube URL on the tweet
-    # makes people leave X — that is the opposite of what we want.
+    # X unfurls the official clip only if the URL is in the tweet and we attach
+    # no other media. Strip a URL the model snuck in, then pin ours once.
     tw = re.sub(r"\s*https?://\S+", "", base["twitter"].strip()).strip()
-    if twitter_len(tw) > 240:
+    if video:
+        if twitter_len(tw) > 220:
+            tw = _trim_tweet(tw, 220)
+        combined = f"{tw}\n\n{video}"
+        if twitter_len(combined) > 280:
+            combined = f"{_trim_tweet(tw, 180)}\n\n{video}"
+        tw = combined
+    elif twitter_len(tw) > 240:
         tw = _trim_tweet(tw, 240)
     base["twitter"] = tw
     thread = [
@@ -224,8 +231,15 @@ def write_copy(
         if str(t).strip()
     ]
     if len(thread) < 2:
-        hook = _trim_tweet(tw) or "Golf being golf."
-        thread = [hook, "That's the take.", "You buying it?"]
+        hook = _trim_tweet(re.sub(r"\s*https?://\S+", "", tw)) or "Golf being golf."
+        thread = [hook, "That's the clip.", "You buying it?"]
+    if video:
+        t0 = _trim_tweet(thread[0], 220)
+        if video not in t0:
+            t0 = f"{t0}\n\n{video}"
+            if twitter_len(t0) > 280:
+                t0 = f"{_trim_tweet(thread[0], 180)}\n\n{video}"
+        thread[0] = t0
     base["twitter_thread"] = thread[:4]
     pq = _trim_tweet(base.get("poll_question") or "You buying this?", 180)
     base["poll_question"] = pq
@@ -273,6 +287,8 @@ def write_copy(
         print("  copy     model mentioned product — using fallback take")
         base = fallback(story, ask=ask)
         tw = re.sub(r"\s*https?://\S+", "", base["twitter"].strip()).strip()
+        if video:
+            tw = f"{tw}\n\n{video}"
         base["twitter"] = tw
         body = re.sub(r"\s*https?://\S+", "", (base.get("reddit_body") or base.get("title") or "").strip()).strip()
         if video:
