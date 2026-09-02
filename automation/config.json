@@ -19,13 +19,10 @@
     "golf"
   ],
   "app_store_url": "https://apps.apple.com/app/id6793305657",
-  "post_time": "06:00",
+  "post_time": "09:30",
   "slots": [
     {
-      "time": "06:00"
-    },
-    {
-      "time": "10:00"
+      "time": "09:30"
     },
     {
       "time": "14:00"
@@ -34,7 +31,10 @@
       "time": "18:00"
     },
     {
-      "time": "20:30"
+      "time": "20:45"
+    },
+    {
+      "time": "06:00"
     }
   ],
   "days": [

@@ -132,50 +132,110 @@ def parse_hhmm(raw: str) -> tuple[int, int]:
     return hour % 24, minute % 60
 
 
-def slot_times(cfg: dict) -> list[str]:
+def posting_days(cfg: dict) -> set[int]:
+    raw = cfg.get("days")
+    if raw is None or raw == []:
+        return set(range(7))
+    if isinstance(raw, int):
+        raw = [raw]
+    days = {int(x) for x in raw}
+    return days or set(range(7))
+
+
+def iter_slots(cfg: dict) -> list[dict]:
     slots = cfg.get("slots") or []
-    times = []
+    seen: set[str] = set()
+    out: list[dict] = []
     for s in slots:
-        raw = (s.get("time") if isinstance(s, dict) else str(s)) or ""
-        if not raw:
+        if isinstance(s, dict):
+            raw_t = s.get("time") or ""
+            raw_d = (s.get("date") or "").strip()
+        else:
+            raw_t, raw_d = str(s), ""
+        if not raw_t:
             continue
-        h, m = parse_hhmm(raw)
-        times.append(f"{h:02d}:{m:02d}")
-    if not times:
+        h, m = parse_hhmm(raw_t)
+        t = f"{h:02d}:{m:02d}"
+        if t in seen:
+            continue
+        seen.add(t)
+        date = ""
+        if raw_d:
+            try:
+                datetime.strptime(raw_d, "%Y-%m-%d")
+                date = raw_d
+            except ValueError:
+                date = ""
+        out.append({"time": t, "date": date})
+    if not out:
         h, m = parse_hhmm(cfg.get("post_time") or "09:30")
-        times = [f"{h:02d}:{m:02d}"]
-    # Keep user order, drop dupes.
-    seen, out = set(), []
-    for t in times:
-        if t not in seen:
-            seen.add(t)
-            out.append(t)
+        out = [{"time": f"{h:02d}:{m:02d}", "date": ""}]
     return out
 
 
-def next_occurrence(hhmm: str, now: datetime | None = None) -> datetime:
-    """Exact clock time in Eastern: today if still ahead, otherwise tomorrow."""
+def slot_times(cfg: dict) -> list[str]:
+    return [s["time"] for s in iter_slots(cfg)]
+
+
+def next_occurrence(
+    hhmm: str,
+    now: datetime | None = None,
+    days: set[int] | None = None,
+) -> datetime:
+    """Next Eastern clock hit for this time, on a posting day."""
     now = now or datetime.now(TZ)
     hour, minute = parse_hhmm(hhmm)
     dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    # Exact clock. Only roll to tomorrow after that minute has already started.
     if dt <= now:
         dt += timedelta(days=1)
+    allowed = days if days is not None else set(range(7))
+    if not allowed:
+        allowed = set(range(7))
+    for _ in range(14):
+        if dt.weekday() in allowed:
+            return dt
+        dt += timedelta(days=1)
     return dt
+
+
+def slot_next(slot: dict, now: datetime, days: set[int]) -> datetime:
+    """User-set date if it's still ahead; otherwise the next clock hit."""
+    t = slot.get("time") or "09:30"
+    raw_d = (slot.get("date") or "").strip()
+    if raw_d:
+        try:
+            hour, minute = parse_hhmm(t)
+            y, mo, d = (int(x) for x in raw_d.split("-"))
+            dt = datetime(y, mo, d, hour, minute, tzinfo=TZ)
+            if dt > now and dt.weekday() in days:
+                return dt
+        except ValueError:
+            pass
+    return next_occurrence(t, now, days)
 
 
 def slot_preview(cfg: dict) -> list[dict]:
     now = datetime.now(TZ)
     booked = _booked_times()
+    days = posting_days(cfg)
     out = []
-    for t in slot_times(cfg):
-        dt = next_occurrence(t, now)
+    for slot in iter_slots(cfg):
+        dt = slot_next(slot, now, days)
         for _ in range(14):
+            if dt.weekday() not in days:
+                dt += timedelta(days=1)
+                continue
             key = dt.strftime("%Y-%m-%d %H:%M")
             if key not in booked:
                 break
-            dt = dt + timedelta(days=1)
-        out.append({"time": t, "next": dt.strftime("%Y-%m-%d %H:%M")})
+            dt += timedelta(days=1)
+        out.append(
+            {
+                "time": slot["time"],
+                "date": dt.strftime("%Y-%m-%d"),
+                "next": dt.strftime("%Y-%m-%d %H:%M"),
+            }
+        )
     return out
 
 
@@ -213,12 +273,13 @@ def remaining_slots(cfg: dict, override: str | None, one: bool = False) -> list[
         return [override]
     now = datetime.now(TZ)
     booked = _booked_times()
+    days = posting_days(cfg)
     upcoming: list[datetime] = []
-    for t in slot_times(cfg):
-        dt = next_occurrence(t, now)
+    for slot in iter_slots(cfg):
+        dt = slot_next(slot, now, days)
         for _ in range(14):
             key = dt.strftime("%Y-%m-%d %H:%M")
-            if key not in booked:
+            if key not in booked and dt.weekday() in days:
                 upcoming.append(dt)
                 break
             dt = dt + timedelta(days=1)

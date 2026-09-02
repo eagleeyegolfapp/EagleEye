@@ -149,8 +149,9 @@ PAGE = r"""<!doctype html>
   .days label { margin:0; text-transform:none; letter-spacing:0; font-size:13px; color:var(--ink);
     display:flex; align-items:center; gap:6px; padding:8px 10px; border:1px solid var(--line); border-radius:999px; }
   .days input { accent-color: var(--gold); }
-  .slot { display:flex; gap:8px; align-items:center; }
-  .slot input { width:128px; }
+  .slot { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .slot input[type=time] { width:128px; }
+  .slot input[type=date] { width:168px; }
   .toggle { display:flex; align-items:center; gap:12px; font-size:16px; }
   .toggle input { width:18px; height:18px; accent-color:var(--gold); }
   button { background:linear-gradient(180deg, var(--gold2), var(--gold)); color:#07080A; border:0;
@@ -266,6 +267,7 @@ PAGE = r"""<!doctype html>
       <label>Times · Eastern</label>
       <div id="slots" class="slots"></div>
       <button type="button" class="ghost tiny" id="add_slot" style="margin-top:8px">Add a time</button>
+      <p class="warn">Set a time and the date fills in with the next time that clock hits. Today if it hasn’t passed, otherwise the next posting day.</p>
       <label>Mix</label>
       <div class="row3">
         <div><label>News</label><input id="mix_news" type="number" min="0" max="100"/></div>
@@ -337,6 +339,13 @@ const daysBox = document.getElementById("days");
 DAYS.forEach((n,i) => {
   daysBox.insertAdjacentHTML("beforeend",
     `<label><input type="checkbox" id="d${i}" data-day="${i}"/> ${n}</label>`);
+});
+daysBox.addEventListener("change", () => {
+  document.querySelectorAll(".slot").forEach(row => {
+    const t = row.querySelector("[data-slot]")?.value;
+    const d = row.querySelector("[data-date]");
+    if (t && d) d.value = nextDateForTime(t);
+  });
 });
 function show(t){ document.getElementById("msg").textContent = t; }
 let busyTimer = null;
@@ -415,24 +424,94 @@ function paintMix(){
 ["mix_news","mix_community","mix_eagleeye"].forEach(id => {
   document.getElementById(id).addEventListener("input", paintMix);
 });
-function renderSlots(times, nextMap){
+function etParts(d){
+  const f = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", weekday: "short",
+    hourCycle: "h23"
+  });
+  return Object.fromEntries(f.formatToParts(d).map(p => [p.type, p.value]));
+}
+function ymdAdd(ymd, days){
+  const [y,m,d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m-1, d + days));
+  return dt.toISOString().slice(0,10);
+}
+function weekdayOf(ymd){
+  const [y,m,d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m-1, d)).getUTCDay(); // 0 Sun … 6 Sat
+}
+function jsToPyWeekday(jsSun0){
+  return (jsSun0 + 6) % 7; // Python/Mon=0
+}
+function checkedDays(){
+  const days = [];
+  DAYS.forEach((_,i) => { if (document.getElementById("d"+i)?.checked) days.push(i); });
+  return days.length ? days : [0,1,2,3,4,5,6];
+}
+function nextDateForTime(hhmm){
+  const [H, M] = (hhmm || "09:30").split(":").map(n => +n || 0);
+  const p = etParts(new Date());
+  const today = `${p.year}-${p.month}-${p.day}`;
+  const nowMin = (+p.hour)*60 + (+p.minute);
+  const slotMin = H*60 + M;
+  let ymd = slotMin > nowMin ? today : ymdAdd(today, 1);
+  const allowed = new Set(checkedDays());
+  for (let i=0; i<14; i++){
+    if (allowed.has(jsToPyWeekday(weekdayOf(ymd)))) return ymd;
+    ymd = ymdAdd(ymd, 1);
+  }
+  return ymd;
+}
+function nowStampET(){
+  const p = etParts(new Date());
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+function bindSlotRow(row){
+  const timeEl = row.querySelector("[data-slot]");
+  const dateEl = row.querySelector("[data-date]");
+  const sync = () => {
+    const t = timeEl.value;
+    if (!t) return;
+    dateEl.value = nextDateForTime(t);
+  };
+  timeEl.addEventListener("change", sync);
+  timeEl.addEventListener("input", sync);
+  dateEl.addEventListener("change", () => {
+    const t = timeEl.value;
+    if (!t || !dateEl.value) return;
+    if ((dateEl.value + "T" + t) <= nowStampET()) dateEl.value = nextDateForTime(t);
+  });
+}
+function renderSlots(slots, nextMap){
   const box = document.getElementById("slots");
   box.innerHTML = "";
-  (times && times.length ? times : ["08:30"]).forEach(t => {
+  const list = (slots && slots.length) ? slots : [{time:"08:30"}];
+  list.forEach(s => {
+    const t = (typeof s === "string") ? s : (s.time || "08:30");
     const nxt = (nextMap && nextMap[t]) ? nextMap[t] : "";
+    const date = (typeof s === "object" && s.date) ? s.date : (nxt ? nxt.slice(0,10) : nextDateForTime(t));
     const row = document.createElement("div");
     row.className = "slot";
     row.innerHTML = `<input type="time" value="${t}" data-slot/>
-      <span style="color:#8E8674;font-size:12px;min-width:140px">${nxt ? "next "+nxt : ""}</span>
+      <input type="date" value="${date}" data-date/>
+      <span style="color:#8E8674;font-size:12px;min-width:140px">${nxt ? "posts "+nxt : "next "+date+" "+t}</span>
       <button type="button" class="ghost tiny" data-del>Remove</button>`;
     row.querySelector("[data-del]").onclick = () => row.remove();
+    bindSlotRow(row);
     box.appendChild(row);
   });
 }
 document.getElementById("add_slot").onclick = () => {
-  const times = [...document.querySelectorAll("[data-slot]")].map(el => el.value).filter(Boolean);
-  times.push("18:00");
-  renderSlots(times, {});
+  const slots = [...document.querySelectorAll(".slot")].map(row => ({
+    time: row.querySelector("[data-slot]").value,
+    date: row.querySelector("[data-date]").value
+  })).filter(s => s.time);
+  const p = etParts(new Date());
+  const t = String((+p.hour + 1) % 24).padStart(2,"0") + ":00";
+  slots.push({ time: t, date: nextDateForTime(t) });
+  renderSlots(slots, {});
 };
 async function load(){
   const r = await fetch("/api/config");
@@ -458,10 +537,17 @@ async function load(){
     document.getElementById("ban_sub").textContent = "Nothing will post until you turn it on and save.";
   }
   if (creating && !busyTimer) watchBusy();
-  const times = (d.slots||[]).map(s => s.time).filter(Boolean);
+  DAYS.forEach((_,i) => { const el = document.getElementById("d"+i); if (el) el.checked = false; });
+  (d.days || [0,1,2,3,4,5,6]).forEach(i => {
+    const el = document.getElementById("d"+i); if (el) el.checked = true;
+  });
   const nextMap = {};
   (d.next_fires || []).forEach(x => { if (x.time) nextMap[x.time] = x.next; });
-  renderSlots(times.length ? times : [d.post_time || "08:30"], nextMap);
+  const slotObjs = (d.slots||[]).map(s => ({
+    time: s.time,
+    date: s.date || (nextMap[s.time] ? nextMap[s.time].slice(0,10) : "")
+  })).filter(s => s.time);
+  renderSlots(slotObjs.length ? slotObjs : [{time: d.post_time || "08:30"}], nextMap);
   document.getElementById("mix_news").value = (d.mix||{}).news ?? 40;
   document.getElementById("mix_community").value = (d.mix||{}).community ?? 40;
   document.getElementById("mix_eagleeye").value = (d.mix||{}).eagleeye ?? 20;
@@ -482,9 +568,6 @@ async function load(){
     shown.textContent = "not set";
     document.getElementById("ends_lbl").textContent = "Set an end date so this cannot run forever.";
   }
-  (d.days || [0,1,2,3,4,5,6]).forEach(i => {
-    const el = document.getElementById("d"+i); if (el) el.checked = true;
-  });
   const ch = (d.community_channels||[]).map(c => `${c.name} | ${c.youtube_id}`).join("\n");
   document.getElementById("channels").value = ch;
   document.getElementById("status").textContent = d.enabled
@@ -512,11 +595,14 @@ function gather(){
     if (p.length < 2) return null;
     return { name: p[0], youtube_id: p[1] };
   }).filter(Boolean);
-  const slotTimes = [...document.querySelectorAll("[data-slot]")].map(el => el.value).filter(Boolean);
+  const slotRows = [...document.querySelectorAll(".slot")].map(row => ({
+    time: row.querySelector("[data-slot]").value,
+    date: row.querySelector("[data-date]").value
+  })).filter(s => s.time);
   return {
     enabled: document.getElementById("enabled").checked,
-    post_time: slotTimes[0] || "08:30",
-    slots: slotTimes.map(t => ({time: t})),
+    post_time: slotRows[0]?.time || "08:30",
+    slots: slotRows,
     mix: {
       news: +document.getElementById("mix_news").value,
       community: +document.getElementById("mix_community").value,
