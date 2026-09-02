@@ -60,6 +60,11 @@ def youtube_id_from_url(url: str) -> str:
     return m.group(1) if m else ""
 
 
+def x_status_id(url: str) -> str:
+    m = re.search(r"(?:x|twitter)\.com/[^/]+/status/(\d+)", url or "")
+    return m.group(1) if m else ""
+
+
 def norm_url(url: str) -> str:
     u = (url or "").strip()
     if not u.startswith("http"):
@@ -103,9 +108,9 @@ def keep_title(title: str) -> bool:
 
 def story_keys(obj: dict) -> list[str]:
     keys: list[str] = []
-    vid = (obj.get("video_id") or "") or youtube_id_from_url(
+    vid = (obj.get("video_id") or obj.get("x_status_id") or "") or youtube_id_from_url(
         obj.get("video_url") or obj.get("article_url") or obj.get("url") or ""
-    )
+    ) or x_status_id(obj.get("video_url") or obj.get("article_url") or obj.get("url") or "")
     if vid:
         keys.append(str(vid))
         keys.append("yt-" + str(vid))
@@ -159,6 +164,7 @@ def score_candidate(
     creator_repeat: bool = False,
     has_embed: bool = True,
     lane: str = "community",
+    x_native: bool = False,
 ) -> float:
     if not keep_title(title):
         return -999.0
@@ -168,9 +174,11 @@ def score_candidate(
     hook = 10.0 if any(h in (title or "").lower() for h in HOOKY) else 0.0
     short_b = 14.0 if is_short else 0.0
     embed_b = 18.0 if has_embed else 0.0
+    # Native X video can autoplay when we quote/embed it. Strongly prefer it.
+    x_b = 48.0 if x_native else 0.0
     repeat = -32.0 if creator_repeat else 0.0
     base = float(max(1, int(weight or 3))) * 3.0
     event = float(event_boost)
     if event:
         event += 24.0  # live-event stories beat random official YouTube
-    return base + rec + hook + short_b + embed_b + event + repeat
+    return base + rec + hook + short_b + embed_b + x_b + event + repeat

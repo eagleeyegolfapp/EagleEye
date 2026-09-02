@@ -16,7 +16,7 @@ from mailer import send_report
 from media import download
 from real_media import fit_ig_portrait, official_still, save_preview
 from research import active_events, fetch_link_story, research_community, research_news
-from story_quality import story_keys
+from story_quality import story_keys, x_status_id
 from workflow_one import load_config
 
 # In-run dedupe so today's slots don't all pick the same clip before state is saved.
@@ -322,40 +322,76 @@ def twitter_payload(
     cfg: dict,
     official: str,
     flourish: str,
+    quote_id: str = "",
 ) -> dict | None:
-    """X-only job. No attached media — the official URL unfurls the real clip."""
+    """X-only job. Quote a native X video when we can so it autoplays. No attached media."""
     acc = os.environ.get("LATE_TWITTER_ACCOUNT_ID", "")
     if not acc:
         return None
-    tweet = (copy.get("twitter") or "").strip()
-    if official and official not in tweet:
-        hook = _strip_urls(tweet)
-        tweet = f"{hook}\n\n{official}".strip()
+    quote_id = quote_id or x_status_id(official)
+    hook = _strip_urls(copy.get("twitter") or "")
+    quoting = bool(quote_id)
+    tweet = hook if quoting else (f"{hook}\n\n{official}".strip() if official else hook)
     item: dict = {"platform": "twitter", "accountId": acc, "customContent": tweet}
+    psd: dict = {}
     if flourish == "thread":
-        thread = [t for t in (copy.get("twitter_thread") or []) if str(t).strip()][:4]
+        thread = [_strip_urls(t) for t in (copy.get("twitter_thread") or []) if str(t).strip()][:4]
+        if quoting and thread:
+            thread[0] = _strip_urls(thread[0])
+        elif official and thread and official not in thread[0]:
+            t0 = _strip_urls(thread[0])
+            thread[0] = f"{t0}\n\n{official}"
         if len(thread) >= 2:
-            item["platformSpecificData"] = {"threadItems": [{"content": t} for t in thread]}
+            psd["threadItems"] = [{"content": t} for t in thread if t]
             item["customContent"] = thread[0]
-            print("  twitter  thread + official unfurl", len(thread), "tweets")
-        else:
-            print("  twitter  single + official unfurl")
-    elif flourish == "poll":
+            print("  twitter  thread", len(thread), "tweets")
+    elif flourish == "poll" and not quoting:
         q = _strip_urls(copy.get("poll_question") or copy.get("twitter") or "")
         opts = [str(o).strip()[:25] for o in (copy.get("poll_options") or []) if str(o).strip()][:4]
         if q and len(opts) >= 2 and not official:
             item["customContent"] = q
-            item["platformSpecificData"] = {"poll": {"options": opts, "duration_minutes": 1440}}
+            psd["poll"] = {"options": opts, "duration_minutes": 1440}
             print("  twitter  poll", q[:50])
         else:
-            print("  twitter  poll skipped — official clip unfurl wins")
-            print("  twitter  single + official unfurl")
+            print("  twitter  poll skipped — clip embed wins")
+    if quoting:
+        psd["quoteTweetId"] = quote_id
+        print("  twitter  QUOTE X video", quote_id)
     else:
-        print("  twitter  single + official unfurl")
+        print("  twitter  unfurl", (official or "")[:70])
+    if psd:
+        item["platformSpecificData"] = psd
     payload = _base_late(copy, when, cfg)
     payload["content"] = item["customContent"]
     payload["platforms"] = [item]
     return payload
+
+
+def _twitter_quote_fallback(payload: dict, url: str) -> dict:
+    """X blocked quoting someone else's post. Embed the status URL instead."""
+    p = json.loads(json.dumps(payload))
+    for plat in p.get("platforms") or []:
+        psd = dict(plat.get("platformSpecificData") or {})
+        psd.pop("quoteTweetId", None)
+        content = _strip_urls(plat.get("customContent") or p.get("content") or "")
+        if url and url not in content:
+            content = f"{content}\n\n{url}".strip()
+        plat["customContent"] = content
+        items = list(psd.get("threadItems") or [])
+        if items:
+            t0 = _strip_urls(items[0].get("content") or "")
+            if url and url not in t0:
+                t0 = f"{t0}\n\n{url}".strip()
+            items[0] = {**items[0], "content": t0}
+            psd["threadItems"] = items
+            plat["customContent"] = t0
+        if psd:
+            plat["platformSpecificData"] = psd
+        else:
+            plat.pop("platformSpecificData", None)
+        p["content"] = content
+    print("  twitter  quote blocked — URL embed instead")
+    return p
 
 
 def reddit_payload(
@@ -451,7 +487,13 @@ def _rate_limit_wait(err: str) -> int | None:
     return 15
 
 
-def submit_late(name: str, payload: dict | None, idem: str, retry: bool = True) -> str:
+def submit_late(
+    name: str,
+    payload: dict | None,
+    idem: str,
+    retry: bool = True,
+    fallback_url: str = "",
+) -> str:
     if not payload:
         return ""
     try:
@@ -462,11 +504,23 @@ def submit_late(name: str, payload: dict | None, idem: str, retry: bool = True) 
         print(f"LATE {name:9} {late_id} {status}")
         return late_id
     except Exception as e:  # noqa: BLE001
-        wait = _rate_limit_wait(str(e)) if retry else None
+        err = str(e)
+        wait = _rate_limit_wait(err) if retry else None
         if wait and name != "reddit":
             print(f"  {name} rate-limited, waiting {wait}s")
             time.sleep(wait)
-            return submit_late(name, payload, idem, retry=False)
+            return submit_late(name, payload, idem, retry=False, fallback_url=fallback_url)
+        low = err.lower()
+        quote_blocked = name == "twitter" and retry and fallback_url and any(
+            s in low for s in ("quot", "mention", "conversation", "not allowed", "403")
+        )
+        if quote_blocked:
+            return submit_late(
+                name,
+                _twitter_quote_fallback(payload, fallback_url),
+                idem + "-url",
+                retry=False,
+            )
         if name == "reddit":
             print(f"  reddit skipped ({e})")
             return ""
@@ -614,9 +668,12 @@ def run_once(
             except Exception as e:  # noqa: BLE001
                 print("  media   still host failed:", e)
                 still = ""
+    quote_id = str(story.get("x_status_id") or x_status_id(official) or "")
     yid_like = "youtube" in official or "youtu.be" in official or "vimeo.com" in official
-    x_like = "x.com/" in official or "twitter.com/" in official
-    if yid_like or x_like:
+    x_like = bool(quote_id) or "x.com/" in official or "twitter.com/" in official
+    if quote_id:
+        kind_used = "x-quote-video"
+    elif yid_like or x_like:
         kind_used = "official-video"
     else:
         kind_used = "official-link"
@@ -647,8 +704,9 @@ def run_once(
         stamp = when_s.replace(" ", "T")
         x_id = submit_late(
             "twitter",
-            twitter_payload(copy, when_s, cfg, official, flourish),
+            twitter_payload(copy, when_s, cfg, official, flourish, quote_id=quote_id),
             f"eagleeye-x-{story['id']}-{stamp}",
+            fallback_url=official if quote_id else "",
         )
         ig_id = submit_late(
             "instagram",
@@ -672,7 +730,7 @@ def run_once(
             f"EagleEye Golf App — post scheduled\n\n"
             f"When:      {when_s} America/New_York\n"
             f"Lane:      {lane}\n"
-            f"X:         official clip unfurl (no generated media)\n"
+            f"X:         quote/embed official video so it autoplays\n"
             f"Instagram: official thumbnail of that same clip\n"
             f"Reddit:    official link\n"
             f"Headline:  {story['headline']}\n"
@@ -690,7 +748,7 @@ def run_once(
             print("  email   failed:", e)
     else:
         print("LATE       dry-run")
-        print("FORMATS    X unfurl + IG official still + Reddit link")
+        print("FORMATS    X quote/embed autoplay + IG official still + Reddit link")
 
     _RUN_LANES.append(lane)
     keys = story_keys(story)

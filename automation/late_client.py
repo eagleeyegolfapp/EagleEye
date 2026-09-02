@@ -173,6 +173,19 @@ def delete_post(post_id: str) -> dict:
     return request("DELETE", f"/posts/{post_id}")
 
 
+def search_tweets(account_id: str, query: str, limit: int = 10) -> list[dict]:
+    """Recent X search via Late. Operators pass through (from:, has:videos, …)."""
+    if not account_id or not query:
+        return []
+    q = urllib.parse.quote(query)
+    n = max(10, min(int(limit or 10), 100))
+    data = request(
+        "GET",
+        f"/twitter/search?accountId={account_id}&query={q}&limit={n}&sortOrder=recency",
+    )
+    return data.get("tweets") or []
+
+
 def list_posts(status: str | None = None, search: str | None = None, limit: int = 20) -> list[dict]:
     q = [f"limit={limit}"]
     if status:

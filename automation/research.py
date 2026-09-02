@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import ssl
 import urllib.request
@@ -13,14 +14,14 @@ from html.parser import HTMLParser
 from urllib.parse import urlparse
 import urllib.parse
 
-from story_quality import fingerprint, keep_title, score_candidate, story_keys, youtube_id_from_url
+from story_quality import fingerprint, keep_title, score_candidate, story_keys, x_status_id, youtube_id_from_url
 
 CTX = ssl.create_default_context()
 NY = ZoneInfo("America/New_York")
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 _YT_CACHE: dict[str, list] = {}
 _RSS_CACHE: dict[str, list] = {}
-_X_DISABLED = False
+_X_CACHE: dict[str, list] = {}
 ATOM = "{http://www.w3.org/2005/Atom}"
 YT = "{http://www.youtube.com/xml/schemas/2015}"
 MRSS = "{http://search.yahoo.com/mrss/}"
@@ -404,40 +405,93 @@ def parse_rss(url: str) -> list[dict]:
     return items
 
 
+def _twitter_account_id() -> str:
+    acc = (os.environ.get("LATE_TWITTER_ACCOUNT_ID") or "").strip()
+    if acc:
+        return acc
+    try:
+        from late_client import resolve_accounts
+
+        resolve_accounts()
+    except Exception as e:  # noqa: BLE001
+        print("  x search  no Late X account:", e)
+        return ""
+    return (os.environ.get("LATE_TWITTER_ACCOUNT_ID") or "").strip()
+
+
+def recent_x_videos(handle: str, n: int = 3) -> list[dict]:
+    """Official native X videos from this account. Quote/embed — never download the file."""
+    handle = (handle or "").lstrip("@")
+    if not handle:
+        return []
+    if handle in _X_CACHE:
+        return _X_CACHE[handle][:n]
+    acc = _twitter_account_id()
+    if not acc:
+        _X_CACHE[handle] = []
+        return []
+    try:
+        from late_client import search_tweets
+
+        tweets = search_tweets(acc, f"from:{handle} has:videos -is:retweet", limit=10)
+    except Exception as e:  # noqa: BLE001
+        print(f"  x search  @{handle} failed: {e}")
+        _X_CACHE[handle] = []
+        return []
+    out: list[dict] = []
+    for t in tweets:
+        tid = str(t.get("id") or "")
+        if not tid.isdigit():
+            continue
+        author = t.get("author") or {}
+        uname = (author.get("username") or handle).lstrip("@")
+        text = (t.get("text") or "").strip()
+        title = re.sub(r"https?://\S+", "", text)
+        title = re.sub(r"\s+", " ", title).strip()[:180]
+        if not keep_title(title) and len(title) < 12:
+            title = f"Clip from @{uname}"
+        out.append(
+            {
+                "title": title or f"Clip from @{uname}",
+                "video_url": f"https://x.com/{uname}/status/{tid}",
+                "video_id": tid,
+                "x_status_id": tid,
+                "channel": uname,
+                "is_short": False,
+                "published": t.get("created") or "",
+                "excerpt": text[:400],
+                "has_x_video": True,
+            }
+        )
+    _X_CACHE[handle] = out
+    return out[:n]
+
+
 def latest_x_post(handle: str) -> dict | None:
-    """Best-effort public fetch of a recent official X post. Link only, never scrape media files."""
-    global _X_DISABLED
-    if _X_DISABLED:
-        return None
-    handle = handle.lstrip("@")
-    page = f"https://r.jina.ai/https://x.com/{handle}"
-    code, text = http_get(page, timeout=8)
-    if code != 200 or not text:
-        _X_DISABLED = True
-        return None
-    ids = re.findall(rf"https://(?:x|twitter)\.com/{handle}/status/(\d+)", text, re.I)
-    if not ids:
-        ids = re.findall(r"status/(\d+)", text)
-    if not ids:
-        return None
-    status_id = ids[0]
-    url = f"https://x.com/{handle}/status/{status_id}"
-    # Grab a nearby line as headline.
-    headline = ""
-    for line in text.splitlines():
-        if status_id in line or (len(line) > 40 and handle.lower() not in line.lower()[:20]):
-            clean = re.sub(r"\s+", " ", line).strip()
-            if 20 < len(clean) < 180 and "http" not in clean[:15]:
-                headline = clean
-                break
-    return {
-        "title": headline or f"New from @{handle}",
-        "video_url": url,
-        "video_id": status_id,
-        "channel": handle,
-        "is_short": False,
-        "published": "",
-    }
+    vids = recent_x_videos(handle, 1)
+    return vids[0] if vids else None
+
+
+def x_video_handles(cfg: dict) -> list[dict]:
+    """Dedupe official X handles from tours, news, and community."""
+    seen: set[str] = set()
+    out: list[dict] = []
+    for group, default_w in (
+        (cfg.get("x_accounts") or [], 8),
+        (cfg.get("news_channels") or [], 8),
+        (cfg.get("community_channels") or [], 6),
+    ):
+        for raw in group:
+            handle = (raw.get("x_handle") or raw.get("handle") or "").lstrip("@")
+            if not handle or handle.lower() in seen:
+                continue
+            seen.add(handle.lower())
+            item = dict(raw)
+            item["handle"] = handle
+            item["x_handle"] = handle
+            item["weight"] = int(raw.get("weight") or default_w)
+            out.append(item)
+    return out
 
 
 def title_event_boost(title: str, cfg: dict) -> int:
@@ -540,6 +594,8 @@ def _community_story(picked: dict, meta: dict) -> dict:
         "is_short": bool(picked.get("is_short")),
         "x_handle": (meta or {}).get("x_handle") or (meta or {}).get("handle") or "",
         "ig_handle": (meta or {}).get("ig_handle") or "",
+        "x_status_id": picked.get("x_status_id") or (sid if is_x else ""),
+        "has_x_video": bool(picked.get("has_x_video") or is_x),
         "thumb": picked.get("thumb") or (
             f"https://i.ytimg.com/vi/{sid}/hqdefault.jpg" if prefix == "yt" else ""
         ),
@@ -592,6 +648,40 @@ def research_news(
                 "thumb": item.get("thumb") or "",
                 "source": src,
                 "kind": "rss",
+            }
+            scored.append((sc, cand, src))
+
+    for acc in weighted_sample(x_video_handles(cfg), 8, cfg):
+        src = {
+            "name": acc.get("name") or acc.get("handle") or "X",
+            "kind": "x",
+            "x_handle": acc.get("handle") or "",
+            "ig_handle": acc.get("ig_handle") or "",
+        }
+        for post in recent_x_videos(acc.get("handle") or "", 3):
+            title = post.get("title") or ""
+            if not keep_title(title):
+                continue
+            if _already(post, used):
+                continue
+            sc = score_candidate(
+                title=title,
+                published=post.get("published") or "",
+                weight=int(acc.get("weight") or 8),
+                event_boost=title_event_boost(title, cfg),
+                is_short=False,
+                creator_repeat=(src["name"] or "").lower() in used_cre,
+                has_embed=True,
+                lane="news",
+                x_native=True,
+            )
+            cand = {
+                **post,
+                "headline": title,
+                "url": post.get("video_url"),
+                "article_url": post.get("video_url"),
+                "kind": "x",
+                "source": src,
             }
             scored.append((sc, cand, src))
 
@@ -672,6 +762,8 @@ def research_news(
         "x_handle": (src.get("x_handle") or "").lstrip("@"),
         "ig_handle": (src.get("ig_handle") or "").lstrip("@"),
         "thumb": picked.get("thumb") or (f"https://i.ytimg.com/vi/{yid}/hqdefault.jpg" if yid else ""),
+        "x_status_id": picked.get("x_status_id") or x_status_id(video) or x_status_id(article),
+        "has_x_video": bool(picked.get("has_x_video") or picked.get("kind") == "x"),
     }
 
 
@@ -688,26 +780,25 @@ def research_community(
     sample = weighted_sample(channels, 14, cfg)
     scored: list[tuple[float, dict, dict]] = []
 
-    for acc in weighted_sample(list(cfg.get("x_accounts") or []), 3, cfg):
-        post = latest_x_post(acc.get("handle") or "")
-        if not post:
-            continue
-        title = post.get("title") or ""
-        if not keep_title(title) or title.lower().startswith("new from @"):
-            continue
-        if _already(post, used):
-            continue
-        sc = score_candidate(
-            title=title,
-            published=post.get("published") or "",
-            weight=int(acc.get("weight") or 4),
-            event_boost=title_event_boost(title, cfg),
-            is_short=False,
-            creator_repeat=(acc.get("name") or acc.get("handle") or "").lower() in used_cre,
-            has_embed=True,
-            lane="community",
-        )
-        scored.append((sc, post, acc))
+    for acc in weighted_sample(x_video_handles(cfg), 12, cfg):
+        for post in recent_x_videos(acc.get("handle") or "", 3):
+            title = post.get("title") or ""
+            if not keep_title(title) or title.lower().startswith("new from @"):
+                continue
+            if _already(post, used):
+                continue
+            sc = score_candidate(
+                title=title,
+                published=post.get("published") or "",
+                weight=int(acc.get("weight") or 8),
+                event_boost=title_event_boost(title, cfg),
+                is_short=False,
+                creator_repeat=(acc.get("name") or acc.get("handle") or "").lower() in used_cre,
+                has_embed=True,
+                lane="community",
+                x_native=True,
+            )
+            scored.append((sc, post, acc))
 
     for ch in sample:
         for vid in recent_videos(ch.get("youtube_id") or "", 4):
@@ -726,6 +817,7 @@ def research_community(
                 creator_repeat=creator in used_cre,
                 has_embed=True,
                 lane="community",
+                x_native=False,
             )
             scored.append((sc, vid, ch))
 

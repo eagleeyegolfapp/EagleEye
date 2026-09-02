@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PIL import Image
 from media import download
-from story_quality import youtube_id_from_url
+from story_quality import x_status_id, youtube_id_from_url
 
 IG_W, IG_H = 1080, 1350
 MIN_BYTES = 8000
@@ -82,9 +82,44 @@ def fit_ig_portrait(blob: bytes) -> bytes:
     return out.getvalue()
 
 
+def x_video_thumb(status_id: str) -> str:
+    """Public thumbnail of an X video tweet. Never the video file."""
+    if not status_id:
+        return ""
+    try:
+        from research import http_get
+        import json
+
+        code, raw = http_get(f"https://api.fxtwitter.com/status/{status_id}")
+        if code != 200 or not raw:
+            return ""
+        data = json.loads(raw)
+        tweet = data.get("tweet") or data
+        media = (tweet.get("media") or {}) if isinstance(tweet, dict) else {}
+        for bucket in ("videos", "all", "photos"):
+            for item in media.get(bucket) or []:
+                if not isinstance(item, dict):
+                    continue
+                thumb = item.get("thumbnail_url") or item.get("url") or ""
+                if "video.twimg.com" in thumb or thumb.endswith(".mp4"):
+                    continue
+                if thumb.startswith("http") and ("pbs.twimg.com" in thumb or thumb.endswith((".jpg", ".jpeg", ".png", ".webp"))):
+                    return thumb
+    except Exception as e:  # noqa: BLE001
+        print("  still   x thumb fail:", e)
+    return ""
+
+
 def official_still(story: dict) -> dict | None:
     """Return {url, bytes, kind} for the still that belongs to this clip/article."""
     tried: list[str] = []
+    xid = (story.get("x_status_id") or "") or x_status_id(story.get("video_url") or "") or x_status_id(
+        story.get("article_url") or ""
+    )
+    if xid:
+        xt = x_video_thumb(xid)
+        if xt:
+            tried.append(xt)
     yid = youtube_id_from_url(story.get("video_url") or "") or youtube_id_from_url(
         story.get("article_url") or ""
     ) or (
@@ -105,7 +140,12 @@ def official_still(story: dict) -> dict | None:
         blob = fetch_image(url)
         if blob:
             src = url
-            kind = "youtube-thumb" if "ytimg.com" in url or "youtube" in url else "official-thumb"
+            if "ytimg.com" in url or "youtube" in url:
+                kind = "youtube-thumb"
+            elif "twimg.com" in url:
+                kind = "x-video-thumb"
+            else:
+                kind = "official-thumb"
             print(f"  still   {kind} {url[:70]}")
             return {"url": url, "bytes": blob, "kind": kind}
 
