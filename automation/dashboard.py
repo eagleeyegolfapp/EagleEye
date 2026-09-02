@@ -531,7 +531,7 @@ async function load(){
   } else if (d.enabled) {
     ban.className = "banner armed";
     document.getElementById("ban_who").textContent = "ARMED";
-    document.getElementById("ban_sub").textContent = "GitHub Actions builds posts at 5:00 AM ET. Late publishes at each time below. Close this window anytime.";
+    document.getElementById("ban_sub").textContent = "GitHub Actions loads today's times into Late. Late publishes even if this Mac is asleep. Close this window anytime.";
   } else {
     ban.className = "banner paused";
     document.getElementById("ban_who").textContent = "PAUSED";

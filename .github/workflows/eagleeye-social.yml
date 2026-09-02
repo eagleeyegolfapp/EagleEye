@@ -1,12 +1,18 @@
-# Sole automatic publisher. Mac launchd is off.
+# Sole automatic publisher. Mac can be asleep or off.
 # Secrets: Settings → Secrets → Actions (LATE_API_KEY, XAI_API_KEY).
-# Late still publishes at the Eastern slot after this job ends.
+# This job loads slots into Late. Late publishes at the Eastern time.
 name: EagleEye social
 
 on:
   schedule:
-    # 5:00 AM Eastern (EDT). Schedules today's remaining slots into Late.
-    - cron: "0 9 * * *"
+    # 4:00 AM ET — load today's slots well before 06:00
+    - cron: "0 8 * * *"
+    # 5:30 AM ET — backup if the 4am job was delayed
+    - cron: "30 9 * * *"
+    # 7:00 AM ET — catch-up anything missed
+    - cron: "0 11 * * *"
+    # 10:00 PM ET — load tomorrow's 06:00 while Late is awake
+    - cron: "0 2 * * *"
   workflow_dispatch:
     inputs:
       kind:
@@ -20,6 +26,12 @@ on:
         required: false
         default: ""
         type: string
+  # First push of this file starts a run so GitHub actually registers the cron.
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/eagleeye-social.yml"
+      - "automation/**"
 
 permissions:
   contents: read
@@ -27,7 +39,7 @@ permissions:
 jobs:
   post:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: automation

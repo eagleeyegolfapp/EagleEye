@@ -241,33 +241,61 @@ def slot_preview(cfg: dict) -> list[dict]:
     return out
 
 
+def _parse_late_when(raw: str) -> datetime | None:
+    raw = (raw or "").replace("Z", "+00:00")
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=TZ)
+    return dt.astimezone(TZ)
+
+
 def _booked_times() -> set[str]:
-    booked = set()
-    for k, st in (load_state().get("posted_slots") or {}).items():
-        if st in {"scheduled", "published", "submitted"}:
-            booked.add(k)
+    """Late is source of truth. Local posted_slots can lie (create IDs that 404)."""
+    booked: set[str] = set()
     if not (os.environ.get("LATE_API_KEY") or "").strip():
+        for k, st in (load_state().get("posted_slots") or {}).items():
+            if st in {"scheduled", "published", "submitted"}:
+                booked.add(k)
         return booked
     try:
         from late_client import list_posts
 
-        for p in list_posts(status="scheduled", limit=100):
-            raw = str(p.get("scheduledFor") or "")
-            if not raw:
+        for p in list_posts(limit=100):
+            st = (p.get("status") or "").lower()
+            if st in {"failed", "draft"}:
                 continue
-            raw = raw.replace("Z", "+00:00")
-            try:
-                dt = datetime.fromisoformat(raw)
-            except ValueError:
-                continue
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=TZ)
-            booked.add(dt.astimezone(TZ).strftime("%Y-%m-%d %H:%M"))
+            dt = _parse_late_when(str(p.get("scheduledFor") or p.get("publishedAt") or ""))
+            if dt:
+                booked.add(dt.strftime("%Y-%m-%d %H:%M"))
     except SystemExit:
-        return booked
+        pass
     except Exception as e:  # noqa: BLE001
-        print("  late    could not list scheduled:", e)
+        print("  late    could not list posts:", e)
+        for k, st in (load_state().get("posted_slots") or {}).items():
+            if st in {"scheduled", "published", "submitted"}:
+                booked.add(k)
     return booked
+
+
+def _slot_candidates(slot: dict, now: datetime, days: set[int], ahead_days: int = 1) -> list[datetime]:
+    """This clock time on today/tomorrow, starting from the date on the row."""
+    hour, minute = parse_hhmm(slot.get("time") or "09:30")
+    start = slot_datetime(slot)
+    start_d = start.date() if start else now.date()
+    out: list[datetime] = []
+    for i in range(0, max(0, ahead_days) + 1):
+        d = now.date() + timedelta(days=i)
+        if d < start_d:
+            continue
+        if d.weekday() not in days:
+            continue
+        out.append(datetime(d.year, d.month, d.day, hour, minute, tzinfo=TZ))
+    return out
 
 
 def remaining_slots(cfg: dict, override: str | None, one: bool = False) -> list[str]:
@@ -277,23 +305,18 @@ def remaining_slots(cfg: dict, override: str | None, one: bool = False) -> list[
     booked = _booked_times()
     days = posting_days(cfg)
     upcoming: list[datetime] = []
+    seen: set[str] = set()
     for slot in iter_slots(cfg):
-        dt = slot_datetime(slot)
-        if dt is None:
-            dt = next_occurrence(slot["time"], now, days)
-            for _ in range(14):
-                key = dt.strftime("%Y-%m-%d %H:%M")
-                if key not in booked and dt.weekday() in days:
-                    upcoming.append(dt)
-                    break
-                dt += timedelta(days=1)
-            continue
-        if dt <= now:
-            continue
-        key = dt.strftime("%Y-%m-%d %H:%M")
-        if key in booked:
-            continue
-        upcoming.append(dt)
+        for dt in _slot_candidates(slot, now, days, ahead_days=1):
+            key = dt.strftime("%Y-%m-%d %H:%M")
+            if key in booked or key in seen:
+                continue
+            if dt <= now:
+                if dt.date() != now.date():
+                    continue
+                print(f"  catch-up missed {key} — publishing now")
+            upcoming.append(dt)
+            seen.add(key)
     upcoming.sort()
     if not upcoming:
         return []
@@ -373,16 +396,28 @@ def _strip_urls(text: str) -> str:
     return re.sub(r"\s*https?://\S+", "", text or "").strip()
 
 
+def _when_is_past(when: str) -> bool:
+    try:
+        dt = datetime.strptime(when[:16], "%Y-%m-%d %H:%M").replace(tzinfo=TZ)
+    except ValueError:
+        return False
+    return dt <= datetime.now(TZ)
+
+
 def _base_late(copy: dict, when: str, cfg: dict, title_suffix: str = "") -> dict:
     payload = {
         "content": _strip_urls(copy.get("twitter") or copy.get("title") or ""),
         "title": ((copy.get("title") or "golf")[:70] + title_suffix),
         "timezone": cfg.get("timezone", "America/New_York"),
-        "scheduledFor": _when_iso(when),
-        "publishNow": False,
         "isDraft": False,
         "platforms": [],
     }
+    if _when_is_past(when):
+        payload["publishNow"] = True
+        print("  late    publishNow — slot time already passed")
+    else:
+        payload["scheduledFor"] = _when_iso(when)
+        payload["publishNow"] = False
     if os.environ.get("LATE_PROFILE_ID"):
         payload["profileId"] = os.environ["LATE_PROFILE_ID"]
     return payload
@@ -662,8 +697,12 @@ def run_once(
     state = load_state()
     posted = state.get("posted_slots") or {}
     if live and posted.get(when_s) in {"scheduled", "published", "submitted"}:
-        print("SKIP       already have a live post for", when_s)
-        return {"status": "already-posted", "when": when_s}
+        if when_s in _booked_times():
+            print("SKIP       already have a live post for", when_s)
+            return {"status": "already-posted", "when": when_s}
+        print("  local state said booked, Late does not — posting anyway")
+        posted.pop(when_s, None)
+        state["posted_slots"] = posted
     used_ids = set(state.get("video_ids") or [])
     used_keys = set(state.get("used_keys") or []) | set(used_ids) | set(_RUN_USED)
     used_creators = list(state.get("used_creators") or []) + list(_RUN_CREATORS)
