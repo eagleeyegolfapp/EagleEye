@@ -317,8 +317,8 @@ PAGE = r"""<!doctype html>
       <section class="card" style="margin-bottom:22px">
         <h2>How a post is built</h2>
         <div class="pipe">
-          <div class="step"><div class="num">1</div><div><b>Prefer video already on X</b><small>Official native videos from tours and creators. Quote them so they autoplay in the feed.</small></div></div>
-          <div class="step"><div class="num">2</div><div><b>YouTube only if no X video</b><small>Then we unfurl the official YouTube URL. Never rip, never AI footage.</small></div></div>
+          <div class="step"><div class="num">1</div><div><b>Prefer video already on X</b><small>Official native videos. The tweet includes their status URL so X embeds the player.</small></div></div>
+          <div class="step"><div class="num">2</div><div><b>YouTube if no X video</b><small>Then we unfurl the official YouTube URL. Never rip, never AI footage.</small></div></div>
           <div class="step"><div class="num">3</div><div><b>IG gets that same frame</b><small>The official video thumbnail. Skip IG if we don't have a real still.</small></div></div>
         </div>
       </section>
@@ -488,7 +488,7 @@ async function load(){
   const ch = (d.community_channels||[]).map(c => `${c.name} | ${c.youtube_id}`).join("\n");
   document.getElementById("channels").value = ch;
   document.getElementById("status").textContent = d.enabled
-    ? "GitHub fills every remaining slot. Late publishes. X quotes official videos so they autoplay. Instagram gets that clip's real thumbnail."
+    ? "GitHub fills every remaining slot. Late publishes. X embeds the official video URL. Instagram gets that clip's real thumbnail."
     : "Paused. Nothing posts until you turn it on and save.";
   const last = d.last;
   const prev = document.getElementById("prev");

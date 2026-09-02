@@ -324,39 +324,35 @@ def twitter_payload(
     flourish: str,
     quote_id: str = "",
 ) -> dict | None:
-    """X-only job. Quote a native X video when we can so it autoplays. No attached media."""
+    """X-only job. The official URL must be IN the tweet or X shows caption-only.
+
+    Native quoteTweetId is silently dropped by X for other people's posts.
+    Putting the status URL in the tweet is what actually embeds their video.
+    """
     acc = os.environ.get("LATE_TWITTER_ACCOUNT_ID", "")
     if not acc:
         return None
     quote_id = quote_id or x_status_id(official)
     hook = _strip_urls(copy.get("twitter") or "")
-    quoting = bool(quote_id)
-    tweet = hook if quoting else (f"{hook}\n\n{official}".strip() if official else hook)
+    tweet = f"{hook}\n\n{official}".strip() if official else hook
     item: dict = {"platform": "twitter", "accountId": acc, "customContent": tweet}
     psd: dict = {}
     if flourish == "thread":
         thread = [_strip_urls(t) for t in (copy.get("twitter_thread") or []) if str(t).strip()][:4]
-        if quoting and thread:
-            thread[0] = _strip_urls(thread[0])
-        elif official and thread and official not in thread[0]:
+        if official and thread:
             t0 = _strip_urls(thread[0])
-            thread[0] = f"{t0}\n\n{official}"
+            if official not in t0:
+                thread[0] = f"{t0}\n\n{official}"
         if len(thread) >= 2:
             psd["threadItems"] = [{"content": t} for t in thread if t]
             item["customContent"] = thread[0]
             print("  twitter  thread", len(thread), "tweets")
-    elif flourish == "poll" and not quoting:
-        q = _strip_urls(copy.get("poll_question") or copy.get("twitter") or "")
-        opts = [str(o).strip()[:25] for o in (copy.get("poll_options") or []) if str(o).strip()][:4]
-        if q and len(opts) >= 2 and not official:
-            item["customContent"] = q
-            psd["poll"] = {"options": opts, "duration_minutes": 1440}
-            print("  twitter  poll", q[:50])
-        else:
-            print("  twitter  poll skipped — clip embed wins")
-    if quoting:
-        psd["quoteTweetId"] = quote_id
-        print("  twitter  QUOTE X video", quote_id)
+    elif flourish == "poll":
+        print("  twitter  poll skipped — clip embed wins")
+    # Always unfurl the official URL. Do not send quoteTweetId: Late accepts it,
+    # then X publishes caption-only and the quote never appears.
+    if quote_id:
+        print("  twitter  embed X video", quote_id)
     else:
         print("  twitter  unfurl", (official or "")[:70])
     if psd:

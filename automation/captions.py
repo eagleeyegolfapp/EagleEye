@@ -9,7 +9,6 @@ import re
 import ssl
 import urllib.request
 
-from story_quality import x_status_id
 from workflow_one import twitter_len
 
 CTX = ssl.create_default_context()
@@ -216,8 +215,9 @@ def write_copy(
     # X unfurls the official clip only if the URL is in the tweet and we attach
     # no other media. Strip a URL the model snuck in, then pin ours once.
     tw = re.sub(r"\s*https?://\S+", "", base["twitter"].strip()).strip()
-    quoting = bool(story.get("x_status_id") or x_status_id(video))
-    if video and not quoting:
+    # The official URL has to live in the tweet. Native quoteTweetId is dropped
+    # by X and we get caption-only. Status URLs unfurl as the real video card.
+    if video:
         if twitter_len(tw) > 220:
             tw = _trim_tweet(tw, 220)
         combined = f"{tw}\n\n{video}"
@@ -235,7 +235,7 @@ def write_copy(
     if len(thread) < 2:
         hook = _trim_tweet(re.sub(r"\s*https?://\S+", "", tw)) or "Golf being golf."
         thread = [hook, "That's the clip.", "You buying it?"]
-    if video and not quoting:
+    if video:
         t0 = _trim_tweet(thread[0], 220)
         if video not in t0:
             t0 = f"{t0}\n\n{video}"
@@ -289,7 +289,7 @@ def write_copy(
         print("  copy     model mentioned product — using fallback take")
         base = fallback(story, ask=ask)
         tw = re.sub(r"\s*https?://\S+", "", base["twitter"].strip()).strip()
-        if video and not quoting:
+        if video:
             tw = f"{tw}\n\n{video}"
         base["twitter"] = tw
         body = re.sub(r"\s*https?://\S+", "", (base.get("reddit_body") or base.get("title") or "").strip()).strip()
