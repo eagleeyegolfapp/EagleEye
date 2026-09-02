@@ -271,8 +271,18 @@ def _booked_times() -> set[str]:
             if st in {"failed", "draft"}:
                 continue
             dt = _parse_late_when(str(p.get("scheduledFor") or p.get("publishedAt") or ""))
-            if dt:
-                booked.add(dt.strftime("%Y-%m-%d %H:%M"))
+            if not dt:
+                continue
+            booked.add(dt.strftime("%Y-%m-%d %H:%M"))
+            # publishNow lands a few minutes late. Count that clock's :00/:30
+            # so a 06:38 publish still occupies the 06:00 slot.
+            for minute in (0, 30):
+                snapped = dt.replace(minute=minute, second=0, microsecond=0)
+                if 0 <= (dt - snapped).total_seconds() < 2 * 3600:
+                    booked.add(snapped.strftime("%Y-%m-%d %H:%M"))
+        for k, st in (load_state().get("posted_slots") or {}).items():
+            if st in {"published"}:
+                booked.add(k)
     except SystemExit:
         pass
     except Exception as e:  # noqa: BLE001

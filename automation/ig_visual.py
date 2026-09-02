@@ -395,8 +395,13 @@ def _strip_kicker(text: str, kicker: str) -> str:
     t = re.sub(r"https?://\S+", "", text or "")
     t = re.sub(r"\s+", " ", t).strip()
     if kicker:
-        t = re.sub(r"^" + re.escape(kicker) + r"\s*[:\-—,]?\s*", "", t, flags=re.I)
-    return t.strip(" -—:,.")
+        t = re.sub(
+            r"^" + re.escape(kicker) + r"(?:['’`]s)?\s*[:\-—,]?\s*",
+            "",
+            t,
+            flags=re.I,
+        )
+    return t.strip(" -—:,.'’")
 
 
 def overlay_hook(copy: dict, take: str, question: str, kicker: str = "") -> str:
