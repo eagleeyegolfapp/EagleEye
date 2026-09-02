@@ -43,6 +43,8 @@ jobs:
           key: eagleeye-state-${{ github.run_id }}
           restore-keys: |
             eagleeye-state-
+      - name: Install Python deps
+        run: pip install -r requirements.txt
       - name: Run → Late
         env:
           LATE_API_KEY: ${{ secrets.LATE_API_KEY }}

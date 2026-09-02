@@ -11,7 +11,8 @@
     "news",
     "news",
     "community",
-    "community"
+    "community",
+    "news"
   ],
   "video_ids": [
     "9Z5jTTcoaI4",
@@ -22,7 +23,9 @@
     "wfPMQdIqNjU",
     "yt-wfPMQdIqNjU",
     "AcSHHdaF72A",
-    "yt-AcSHHdaF72A"
+    "yt-AcSHHdaF72A",
+    "hPlqpPbXZp0",
+    "yt-hPlqpPbXZp0"
   ],
   "used_keys": [
     "9Z5jTTcoaI4",
@@ -44,36 +47,45 @@
     "AcSHHdaF72A",
     "yt-AcSHHdaF72A",
     "youtube:AcSHHdaF72A",
-    "fp:hardestchallengeatthehardestcourse"
+    "fp:hardestchallengeatthehardestcourse",
+    "hPlqpPbXZp0",
+    "yt-hPlqpPbXZp0",
+    "youtube:hPlqpPbXZp0",
+    "fp:oneofusoneofnevermind"
   ],
   "last": {
-    "lane": "community",
-    "when": "2026-09-02 08:30",
-    "headline": "Hardest Challenge at the Hardest Course",
-    "video_url": "https://www.youtube.com/watch?v=AcSHHdaF72A",
-    "still": "https://media.zernio.com/temp/1788313813267_4m9igree_yt-AcSHHdaF72A.jpg",
-    "photo_credit": "Photo: \"Palm Course - Reverse\" by Sam Howzit is licensed under CC BY 2.0. To view a copy of this license, visit https://creativecommons.org/licenses/by/2.0/.",
+    "lane": "news",
+    "when": "2026-09-02 12:15",
+    "headline": "One of us! One of-- Never mind.",
+    "video_url": "https://www.youtube.com/watch?v=hPlqpPbXZp0",
+    "still": "https://media.zernio.com/temp/1788314235475_5ym2jrau_yt-hPlqpPbXZp0.jpg",
+    "photo_credit": "",
     "packaged": "official-video",
-    "flourish": "story",
-    "copy": "Good Good Girls tried to break that course with their challenge and got broken instead. The rough chewed them up and spit out worse scores than most hackers post on a Saturday. Would you rather face that setup or play 18 with nothing but a 7-iron?\n\nhttps://www.youtube.com/watch?v=AcSHHdaF72A",
-    "late_id": "6a9780d7d2e02274619b9056",
-    "status": "scheduled"
+    "flourish": "thread",
+    "copy": "PGA TOUR almost sold Scottie Scheffler as one of us before he cleaned it up like the machine he is. His mistakes still beat our best ideas. What actually counts as a blown shot for these guys?\n\nhttps://www.youtube.com/watch?v=hPlqpPbXZp0",
+    "late_id": "6a97827d7ca180f455b3efbf",
+    "status": "scheduled",
+    "ig_id": "6a97827e7ca180f455b3f057"
   },
   "posted_slots": {
     "2026-09-02 06:00": "scheduled",
-    "2026-09-02 08:30": "scheduled"
+    "2026-09-02 08:30": "scheduled",
+    "2026-09-02 12:15": "scheduled"
   },
   "used_creators": [
     "PGA TOUR Champions",
-    "Good Good Girls"
+    "Good Good Girls",
+    "PGA TOUR"
   ],
   "recent_copy": [
     "Steven Alker carving it up again while everyone else fights for scraps at Warwick Hills. PGA TOUR Champions with the usual senior highlights. Who actually has the best iron game le",
-    "Good Good Girls tried to break that course with their challenge and got broken instead. The rough chewed them up and spit out worse scores than most hackers post on a Saturday. Wou"
+    "Good Good Girls tried to break that course with their challenge and got broken instead. The rough chewed them up and spit out worse scores than most hackers post on a Saturday. Wou",
+    "PGA TOUR almost sold Scottie Scheffler as one of us before he cleaned it up like the machine he is. His mistakes still beat our best ideas. What actually counts as a blown shot for"
   ],
   "reddit_weekly_iso": "2026-W36",
   "reddit_weekly_index": 1,
   "flourishes": [
-    "story"
+    "story",
+    "thread"
   ]
 }

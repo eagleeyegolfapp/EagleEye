@@ -13,6 +13,9 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
+_VENV = HERE / ".venv" / "bin" / "python3"
+if _VENV.exists() and Path(sys.executable).resolve() != _VENV.resolve():
+    os.execv(str(_VENV), [str(_VENV), *sys.argv])
 HOST, PORT = "127.0.0.1", 8787
 sys.path.insert(0, str(HERE))
 from workflow_one import load_dotenv  # noqa: E402
@@ -311,7 +314,7 @@ PAGE = r"""<!doctype html>
         <div class="pipe">
           <div class="step"><div class="num">1</div><div><b>Real clip or article</b><small>Official YouTube, Shorts, Vimeo, or X — linked, never ripped.</small></div></div>
           <div class="step"><div class="num">2</div><div><b>X + Reddit every time</b><small>One Late post per slot. X is usually a single tweet with the official clip. Reddit is your profile, plus one golf subreddit once a week.</small></div></div>
-          <div class="step"><div class="num">3</div><div><b>One extra, not all of them</b><small>Each slot rolls thread, Story, or poll — never stacked. Keeps it at 5 Late posts/day, not 10.</small></div></div>
+          <div class="step"><div class="num">3</div><div><b>Instagram shows the take</b><small>A quote card of the caption — not a random golf photo. A real CC photo only if it clearly matches the player or event.</small></div></div>
         </div>
       </section>
       <section class="card">

@@ -8,4 +8,6 @@ if curl -sf -o /dev/null --max-time 1 "$URL"; then
   open "$URL"
   exit 0
 fi
-exec /usr/bin/python3 "$DIR/dashboard.py"
+PY="$DIR/.venv/bin/python3"
+if [ ! -x "$PY" ]; then PY=/usr/bin/python3; fi
+exec "$PY" "$DIR/dashboard.py"

@@ -12,7 +12,8 @@ from zoneinfo import ZoneInfo
 from captions import write_copy
 from late_client import create_post, persist_ids, resolve_accounts
 from mailer import send_report
-from find_media import credit_line, find_subject_image
+from find_media import credit_line, strict_subject_image
+from quote_card import render_quote_card
 from media import download
 from research import active_events, fetch_link_story, research_community, research_news
 from story_quality import story_keys
@@ -447,6 +448,16 @@ FALLBACK_STILL = (
 )
 
 
+def host_bytes(blob: bytes, slug: str) -> str:
+    from late_client import presign_and_upload
+
+    if len(blob) < 2000:
+        raise RuntimeError(f"image too small ({len(blob)} bytes)")
+    url = presign_and_upload(blob, f"{slug}.jpg", "image/jpeg")
+    print("  media   uploaded quote card", url[:70])
+    return url
+
+
 def host_media(url: str, slug: str, content_type: str = "image/jpeg") -> str:
     """Upload to Late so Instagram can fetch it. Never send Wikimedia/Flickr hotlinks."""
     if "getlate" in url or "zernio.com" in url:
@@ -539,33 +550,47 @@ def run_once(
     _RUN_FLOURISH.append(flourish)
     print(f"FLOURISH   {flourish}  (one extra — not stacked)")
 
-    photo = find_subject_image(story)
-    credit = credit_line(photo)
     copy = write_copy(
         story,
-        photo_credit=credit,
+        photo_credit="",
         angle=angle,
         angles_total=angles_total,
         recent_takes=(state.get("recent_copy") or []) + _RUN_COPY,
     )
     _RUN_COPY.append((copy.get("twitter") or "")[:180])
-    still = (photo or {}).get("url") or ""
+    photo = strict_subject_image(story)
+    credit = credit_line(photo) if photo else ""
+    if credit:
+        fc = (copy.get("ig_first_comment") or "").strip()
+        copy["ig_first_comment"] = (fc + "\n\n" + credit).strip()
+        copy["instagram_first_comment"] = copy["ig_first_comment"]
+    card_bytes: bytes | None = None
+    if photo and photo.get("url"):
+        still = photo["url"]
+        print("IG VISUAL  strict photo", photo.get("title", "")[:60])
+    else:
+        card_bytes = render_quote_card(copy, story)
+        still = ""
+        print("IG VISUAL  quote card of the take")
+        out_dir = HERE / "out" / "cards"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / f"{story.get('id', 'card')}.jpg").write_bytes(card_bytes)
     official = story.get("video_url") or story.get("article_url") or ""
     if live:
         found = resolve_accounts()
         persist_ids(found)
         hosted = ""
-        if still:
-            try:
+        try:
+            if card_bytes:
+                hosted = host_bytes(card_bytes, story["id"] + "-card")
+            elif still:
                 hosted = host_media(still, story["id"], "image/jpeg")
-            except Exception as e:  # noqa: BLE001
-                print("  media   primary still failed:", e)
-        if not hosted:
-            fb = (cfg.get("fallback_still") or FALLBACK_STILL).strip()
+        except Exception as e:  # noqa: BLE001
+            print("  media   host failed:", e)
             try:
-                hosted = host_media(fb, "golf-fallback", "image/jpeg")
-            except Exception as e:  # noqa: BLE001
-                print("  media   fallback still failed:", e)
+                hosted = host_bytes(render_quote_card(copy, story), story["id"] + "-card2")
+            except Exception as e2:  # noqa: BLE001
+                print("  media   quote card host failed:", e2)
         still = hosted
         if not still:
             raise SystemExit("Instagram needs a Late-hosted still. Upload failed.")

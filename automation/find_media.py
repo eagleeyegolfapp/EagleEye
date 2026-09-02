@@ -369,6 +369,51 @@ def _curated(story: dict) -> dict:
     return hit
 
 
+def strict_subject_image(story: dict) -> dict | None:
+    """Only a photo whose title clearly matches the event or player. Else None."""
+    bits = [
+        story.get("headline") or "",
+        story.get("who") or "",
+        story.get("event") or "",
+        story.get("course") or "",
+    ]
+    text = " ".join(bits)
+    queries: list[str] = []
+    for token in EVENTS:
+        if token.lower() in text.lower():
+            queries.append(f"{token} golf")
+    for n in re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b", text):
+        if n.lower() in {(story.get("creator") or "").lower(), (story.get("video_channel") or "").lower()}:
+            continue
+        queries.append(f"{n} golf")
+    seen: set[str] = set()
+    uniq = []
+    for q in queries:
+        k = q.lower()
+        if k not in seen:
+            seen.add(k)
+            uniq.append(q)
+    for q in uniq[:5]:
+        hit = openverse_search(q, scenic=False) or wikimedia_search(q, scenic=False)
+        if not hit:
+            continue
+        blob = _hit_blob(hit)
+        if OFF_TOPIC.search(blob):
+            continue
+        if not GOLFISH.search(blob):
+            continue
+        strong = [
+            t for t in re.findall(r"[a-z]{4,}", q.lower())
+            if t not in STOP and t not in WEAK and t != "golf"
+        ]
+        if strong and not any(t in blob.lower() for t in strong):
+            continue
+        print(f"  ig still  STRICT {hit['source']} / {hit['license']} / q={q!r}")
+        return hit
+    print("  ig still  no strict photo — will use quote card")
+    return None
+
+
 def find_subject_image(story: dict) -> dict:
     """Always return a rights-safe golf photograph. Prefer subject match, never skip."""
     queries = subject_queries(story)

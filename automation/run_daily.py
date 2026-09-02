@@ -9,6 +9,9 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+_VENV = HERE / ".venv" / "bin" / "python3"
+if _VENV.exists() and Path(sys.executable).resolve() != _VENV.resolve():
+    os.execv(str(_VENV), [str(_VENV), *sys.argv])
 sys.path.insert(0, str(HERE))
 
 from workflow_one import load_config, load_dotenv  # noqa: E402
