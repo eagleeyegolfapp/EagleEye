@@ -164,7 +164,7 @@ def presign_and_upload(blob: bytes, filename: str, content_type: str = "image/jp
         method="PUT",
         headers={"Content-Type": content_type},
     )
-    with urllib.request.urlopen(req, timeout=120, context=CTX):
+    with urllib.request.urlopen(req, timeout=180, context=CTX):
         pass
     return public_url
 

@@ -23,7 +23,9 @@ NOT a brand intern. NOT "New from X:". NOT a rewritten YouTube title.
 
 Rules:
 - Do NOT restate the video/article title. React to it. Assume they can read the headline.
-- First line is the hook. It has to work even if they never click.
+- First line is the hook. It has to work as ON-SCREEN text in a 9:16 video that autoplays in the feed. People will not click a link.
+- Never write "link in comments", "check the comments", "watch the clip", "full video below", or "link in bio".
+- Do not put URLs in twitter, twitter_thread, instagram, or poll text. The system handles source links.
 - Community: pick a side, roast, or agree. Credit the creator by name in the sentence, not as a byline.
 - News: a take, not the lede.
 - About a third of posts end with a specific question golfers will argue about. Never "thoughts?" or "agree?".
@@ -31,10 +33,10 @@ Rules:
 - Emojis: 0-2, only if they land (👀 😭 🔥 💀). No hashtag soup.
 - Never mention EagleEye, App Store, unlock, subscription, ads, or download.
 - Never pretend we filmed it or collab'd.
-- X single tweet (twitter): under 200 characters. The system appends the URL. Do not put the URL in twitter yourself.
-- X thread (twitter_thread): array of exactly 3 tweets. 1 = hook (no URL). 2 = the take. 3 = a specific question golfers will fight about. Each under 200 characters. No URLs.
+- X single tweet (twitter): under 200 characters. No URL.
+- X thread (twitter_thread): array of exactly 3 tweets. 1 = hook. 2 = the take. 3 = a specific question golfers will fight about. Each under 200 characters. No URLs.
 - X poll: poll_question is the question (under 180 chars, no URL). poll_options is 3 or 4 answers, EACH 25 characters max, punchy, no emoji.
-- Instagram: 2-4 short lines. Same take, a little more room.
+- Instagram: 2-4 short lines. Same take. The video already shows the take — caption can be shorter + the question.
 - Reddit title: debate hook, under 80 characters, no emoji dump.
 - Reddit body: 1-2 sentences. Do not paste the URL; the system appends it.
 - ig_first_comment: ONLY Watch/Read links if we pass them. No recap, no photo credit (we add credit later).
@@ -210,35 +212,20 @@ def write_copy(
         if opts:
             base["poll_options"] = opts
 
-    # Always pin the official URL on X / Reddit. Don't rely on the model.
-    tw = base["twitter"].strip()
-    # Strip a URL the model snuck in — we add it once, at the end.
-    tw = re.sub(r"\s*https?://\S+", "", tw).strip()
-    if video:
-        tw = f"{tw}\n\n{video}"
-    if twitter_len(tw) > 280:
-        body = re.sub(r"\s*https?://\S+", "", base["twitter"]).strip()
-        if twitter_len(body) > 220:
-            body = body[:217].rstrip() + "…"
-        tw = f"{body}\n\n{video}" if video else body
-        if twitter_len(tw) > 280:
-            tw = video or tw[:280]
-
-    # Do not cold-tag mega creators. Mentions get you muted, not collabs.
+    # Native autoplay video/image is the X post. A YouTube URL on the tweet
+    # makes people leave X — that is the opposite of what we want.
+    tw = re.sub(r"\s*https?://\S+", "", base["twitter"].strip()).strip()
+    if twitter_len(tw) > 240:
+        tw = _trim_tweet(tw, 240)
     base["twitter"] = tw
-    thread = [_trim_tweet(t) for t in (base.get("twitter_thread") or []) if str(t).strip()]
+    thread = [
+        _trim_tweet(re.sub(r"\s*https?://\S+", "", t))
+        for t in (base.get("twitter_thread") or [])
+        if str(t).strip()
+    ]
     if len(thread) < 2:
-        hook = _trim_tweet(re.sub(r"\s*https?://\S+", "", tw))
-        thread = [hook or "Golf being golf.", "That's the clip.", "You buying it?"]
-    # URL lives on tweet 1 so X unfurls the official video.
-    if video:
-        t0 = _trim_tweet(thread[0], 220)
-        if video not in t0:
-            t0 = f"{t0}\n\n{video}"
-            if twitter_len(t0) > 280:
-                t0 = _trim_tweet(thread[0], 180)
-                t0 = f"{t0}\n\n{video}"
-        thread[0] = t0
+        hook = _trim_tweet(tw) or "Golf being golf."
+        thread = [hook, "That's the take.", "You buying it?"]
     base["twitter_thread"] = thread[:4]
     pq = _trim_tweet(base.get("poll_question") or "You buying this?", 180)
     base["poll_question"] = pq
@@ -285,13 +272,19 @@ def write_copy(
     if story.get("lane") != "eagleeye" and any(b in blob for b in banned):
         print("  copy     model mentioned product — using fallback take")
         base = fallback(story, ask=ask)
-        tw = base["twitter"].strip()
-        if video and video not in tw:
-            tw = f"{tw}\n\n{video}"
+        tw = re.sub(r"\s*https?://\S+", "", base["twitter"].strip()).strip()
         base["twitter"] = tw
-        base["reddit"] = base.get("reddit_body") or base["title"]
-        if video and video not in (base["reddit"] or ""):
-            base["reddit"] = f"{base['reddit']}\n\n{video}"
-        base["instagram_first_comment"] = base.get("ig_first_comment") or ""
+        body = re.sub(r"\s*https?://\S+", "", (base.get("reddit_body") or base.get("title") or "").strip()).strip()
+        if video:
+            body = f"{body}\n\n{video}"
+        base["reddit"] = body
+        base["reddit_body"] = body
+        comment_bits = []
+        if video:
+            comment_bits.append(f"Watch 👉 {video}")
+        if photo_credit:
+            comment_bits.append(photo_credit)
+        base["ig_first_comment"] = "\n\n".join(comment_bits)
+        base["instagram_first_comment"] = base["ig_first_comment"]
         base["twitter_chars"] = twitter_len(base["twitter"])
     return base

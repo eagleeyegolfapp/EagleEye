@@ -5,19 +5,19 @@ from __future__ import annotations
 import json
 import os
 import re
-from datetime import datetime, timedelta
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from captions import write_copy
 from late_client import create_post, persist_ids, resolve_accounts
 from mailer import send_report
-from find_media import credit_line, strict_subject_image
 from quote_card import render_quote_card
 from media import download
 from research import active_events, fetch_link_story, research_community, research_news
 from story_quality import story_keys
-from workflow_one import load_config, twitter_len as _twlen
+from workflow_one import load_config
 
 # In-run dedupe so today's slots don't all pick the same clip before state is saved.
 _RUN_USED: set[str] = set()
@@ -290,103 +290,112 @@ def pick_flourish(cfg: dict, state: dict) -> str:
     return "none"
 
 
-def late_payload(
-    story: dict,
-    copy: dict,
-    when: str,
-    cfg: dict,
-    media: dict,
-    extra_reddit: list[str] | None = None,
-    flourish: str = "none",
-) -> dict:
-    mapping = {
-        "twitter": os.environ.get("LATE_TWITTER_ACCOUNT_ID", ""),
-        "instagram": os.environ.get("LATE_INSTAGRAM_ACCOUNT_ID", ""),
-        "reddit": os.environ.get("LATE_REDDIT_ACCOUNT_ID", ""),
-    }
-    still = media.get("still") or ""
-    official = media.get("official") or story.get("video_url") or ""
-    has_video = bool(official)
-    platforms = []
-    for name in cfg.get("platforms_stills") or ["twitter", "instagram", "reddit"]:
-        acc = mapping.get(name, "")
-        if not acc:
-            continue
-        # Instagram is a separate Late job (mediaItems required). Skip it here.
-        if name == "instagram":
-            continue
-        if name == "reddit":
-            profile = (cfg.get("reddit_subreddit") or "u_eagleeyegolfapp").lstrip("r/")
-            targets = [profile]
-            for extra in extra_reddit or []:
-                sub = str(extra or "").strip().lstrip("r/")
-                if sub and sub not in targets:
-                    targets.append(sub)
-            for sub in targets:
-                psd = {
-                    "subreddit": sub,
-                    "title": (copy.get("title") or copy.get("reddit_title") or "")[:300],
-                }
-                if official:
-                    psd["url"] = official
-                label = sub if sub.startswith("u_") else f"r/{sub}"
-                print(f"  reddit   {label}")
-                platforms.append(
-                    {
-                        "platform": "reddit",
-                        "accountId": acc,
-                        "customContent": copy.get("reddit") or copy.get("reddit_body") or "",
-                        "platformSpecificData": psd,
-                    }
-                )
-            continue
-        item: dict = {
-            "platform": name,
-            "accountId": acc,
-            "customContent": copy.get(name, copy["reddit"]),
-        }
-        if name == "twitter":
-            if flourish == "poll":
-                q = (copy.get("poll_question") or copy.get("twitter") or "").strip()
-                q = re.sub(r"\s*https?://\S+", "", q).strip()
-                opts = [str(o).strip()[:25] for o in (copy.get("poll_options") or []) if str(o).strip()][:4]
-                if q and len(opts) >= 2:
-                    if _twlen(q) > 250:
-                        q = q[:240].rstrip() + "…"
-                    item["customContent"] = q
-                    item["platformSpecificData"] = {
-                        "poll": {"options": opts, "duration_minutes": 1440}
-                    }
-                    print("  twitter  poll", q[:50], "|", " / ".join(opts))
-                else:
-                    print("  twitter  poll skipped — using single tweet")
-            elif flourish == "thread":
-                thread = [t for t in (copy.get("twitter_thread") or []) if t]
-                if len(thread) >= 2:
-                    items = [{"content": t} for t in thread[:4]]
-                    item["platformSpecificData"] = {"threadItems": items}
-                    item["customContent"] = items[0]["content"]
-                    print("  twitter  thread", len(items), "tweets")
-            else:
-                print("  twitter  single")
-            platforms.append(item)
-            continue
-        platforms.append(item)
-    if not platforms:
-        raise SystemExit("No Late account IDs — connect X, Instagram, Reddit.")
-    if not official and not still:
-        raise SystemExit("No embed URL and no rights-safe still.")
+def _when_iso(when: str) -> str:
+    s = when.replace(" ", "T")
+    if len(s) == 16:
+        s += ":00"
+    return s
+
+
+def _strip_urls(text: str) -> str:
+    return re.sub(r"\s*https?://\S+", "", text or "").strip()
+
+
+def _base_late(copy: dict, when: str, cfg: dict, title_suffix: str = "") -> dict:
     payload = {
-        "content": copy["reddit"],
-        "title": copy["title"],
+        "content": _strip_urls(copy.get("twitter") or copy.get("title") or ""),
+        "title": ((copy.get("title") or "golf")[:70] + title_suffix),
         "timezone": cfg.get("timezone", "America/New_York"),
-        "scheduledFor": when.replace(" ", "T") + ("" if len(when) > 16 else ":00"),
+        "scheduledFor": _when_iso(when),
         "publishNow": False,
         "isDraft": False,
-        "platforms": platforms,
+        "platforms": [],
     }
     if os.environ.get("LATE_PROFILE_ID"):
         payload["profileId"] = os.environ["LATE_PROFILE_ID"]
+    return payload
+
+
+def twitter_payload(
+    copy: dict,
+    when: str,
+    cfg: dict,
+    video: str,
+    still: str,
+    flourish: str,
+) -> dict | None:
+    """X-only job. Native video autoplays in the feed. No YouTube URL on the tweet."""
+    acc = os.environ.get("LATE_TWITTER_ACCOUNT_ID", "")
+    if not acc:
+        return None
+    hook = _strip_urls(copy.get("twitter") or "")
+    item: dict = {"platform": "twitter", "accountId": acc, "customContent": hook}
+    # Polls cannot ship with native video. Video wins.
+    if flourish == "thread":
+        thread = [_strip_urls(t) for t in (copy.get("twitter_thread") or []) if str(t).strip()]
+        thread = [t for t in thread if t][:4]
+        if len(thread) >= 2:
+            item["platformSpecificData"] = {"threadItems": [{"content": t} for t in thread]}
+            item["customContent"] = thread[0]
+            print("  twitter  thread + autoplay", len(thread), "tweets")
+        else:
+            print("  twitter  single + autoplay")
+    else:
+        if flourish == "poll":
+            print("  twitter  poll skipped — native video autoplays instead")
+        print("  twitter  single + autoplay")
+    payload = _base_late(copy, when, cfg)
+    payload["content"] = item["customContent"]
+    payload["platforms"] = [item]
+    if video:
+        payload["mediaItems"] = [{"url": video, "type": "video"}]
+    elif still:
+        payload["mediaItems"] = [{"url": still, "type": "image"}]
+    else:
+        return None
+    return payload
+
+
+def reddit_payload(
+    copy: dict,
+    when: str,
+    cfg: dict,
+    official: str,
+    extra_reddit: list[str] | None = None,
+) -> dict | None:
+    """Reddit-only job. Link post to the official clip. Never attach our MP4."""
+    acc = os.environ.get("LATE_REDDIT_ACCOUNT_ID", "")
+    if not acc:
+        return None
+    profile = (cfg.get("reddit_subreddit") or "u_eagleeyegolfapp").lstrip("r/")
+    targets = [profile]
+    for extra in extra_reddit or []:
+        sub = str(extra or "").strip().lstrip("r/")
+        if sub and sub not in targets:
+            targets.append(sub)
+    platforms = []
+    for sub in targets:
+        psd = {
+            "subreddit": sub,
+            "title": (copy.get("title") or copy.get("reddit_title") or "")[:300],
+        }
+        if official:
+            psd["url"] = official
+        label = sub if sub.startswith("u_") else f"r/{sub}"
+        print(f"  reddit   {label}")
+        platforms.append(
+            {
+                "platform": "reddit",
+                "accountId": acc,
+                "customContent": copy.get("reddit") or copy.get("reddit_body") or "",
+                "platformSpecificData": psd,
+            }
+        )
+    if not platforms:
+        return None
+    payload = _base_late(copy, when, cfg, " · Reddit")
+    payload["content"] = copy.get("reddit") or copy.get("reddit_body") or ""
+    payload["platforms"] = platforms
     return payload
 
 
@@ -394,52 +403,86 @@ def instagram_payload(
     copy: dict,
     when: str,
     cfg: dict,
+    video: str,
     still: str,
     flourish: str,
 ) -> dict | None:
-    """Instagram must get top-level mediaItems. X cannot share that payload."""
+    """IG-only job. A video becomes a Reel and autoplays in the feed."""
     acc = os.environ.get("LATE_INSTAGRAM_ACCOUNT_ID", "")
-    if not acc or not still:
+    if not acc:
         return None
-    when_s = when.replace(" ", "T")
-    if len(when_s) == 16:
-        when_s += ":00"
-    feed = {
-        "platform": "instagram",
-        "accountId": acc,
-        "customContent": copy.get("instagram") or copy.get("twitter") or "",
-        "platformSpecificData": {
-            "firstComment": copy.get("instagram_first_comment")
-            or copy.get("ig_first_comment")
-            or "",
-        },
+    if not video and not still:
+        return None
+    psd: dict = {
+        "firstComment": copy.get("instagram_first_comment")
+        or copy.get("ig_first_comment")
+        or "",
     }
-    platforms = [feed]
-    if flourish == "story":
-        platforms.append(
-            {
-                "platform": "instagram",
-                "accountId": acc,
-                "customContent": "",
-                "platformSpecificData": {"contentType": "story"},
-            }
-        )
-        print("  instagram feed + story (own Late job, mediaItems)")
+    if video:
+        media = [{"url": video, "type": "video"}]
+        if still:
+            media[0]["instagramThumbnail"] = still
+        psd["shareToFeed"] = True
+        print("  instagram reel (autoplay)")
     else:
-        print("  instagram feed (own Late job, mediaItems)")
-    payload = {
-        "content": copy.get("instagram") or copy.get("title") or "",
-        "title": ((copy.get("title") or "golf")[:70] + " · IG"),
-        "timezone": cfg.get("timezone", "America/New_York"),
-        "scheduledFor": when_s,
-        "publishNow": False,
-        "isDraft": False,
-        "mediaItems": [{"url": still, "type": "image"}],
-        "platforms": platforms,
-    }
-    if os.environ.get("LATE_PROFILE_ID"):
-        payload["profileId"] = os.environ["LATE_PROFILE_ID"]
+        media = [{"url": still, "type": "image"}]
+        print("  instagram feed still")
+    payload = _base_late(copy, when, cfg, " · IG")
+    payload["content"] = copy.get("instagram") or copy.get("twitter") or ""
+    payload["mediaItems"] = media
+    payload["platforms"] = [
+        {
+            "platform": "instagram",
+            "accountId": acc,
+            "customContent": copy.get("instagram") or copy.get("twitter") or "",
+            "platformSpecificData": psd,
+        }
+    ]
     return payload
+
+
+def _rate_limit_wait(err: str) -> int | None:
+    blob = err.lower()
+    if "429" not in err and "rate-limited" not in blob and "rate limited" not in blob:
+        return None
+    m = re.search(r"rateLimitedUntil\"\s*:\s*\"([^\"]+)\"", err)
+    if m:
+        raw = m.group(1).replace("Z", "+00:00")
+        try:
+            until = datetime.fromisoformat(raw)
+            if until.tzinfo is None:
+                until = until.replace(tzinfo=timezone.utc)
+            sec = int((until - datetime.now(timezone.utc)).total_seconds()) + 2
+            return max(5, min(sec, 90))
+        except ValueError:
+            pass
+    m = re.search(r"wait\s+(\d+)\s*m", blob)
+    if m:
+        return max(5, min(int(m.group(1)) * 60, 90))
+    return 15
+
+
+def submit_late(name: str, payload: dict | None, idem: str, retry: bool = True) -> str:
+    if not payload:
+        return ""
+    try:
+        res = create_post(payload, idempotency_key=idem)
+        post = res.get("post") or res.get("existingPost") or res
+        late_id = str(post.get("_id") or post.get("id") or "")
+        status = str(post.get("status") or "submitted")
+        print(f"LATE {name:9} {late_id} {status}")
+        return late_id
+    except Exception as e:  # noqa: BLE001
+        wait = _rate_limit_wait(str(e)) if retry else None
+        if wait and name != "reddit":
+            print(f"  {name} rate-limited, waiting {wait}s")
+            time.sleep(wait)
+            return submit_late(name, payload, idem, retry=False)
+        if name == "reddit":
+            print(f"  reddit skipped ({e})")
+            return ""
+        print(f"  {name} failed: {e}")
+        return ""
 
 
 FALLBACK_STILL = (
@@ -448,13 +491,15 @@ FALLBACK_STILL = (
 )
 
 
-def host_bytes(blob: bytes, slug: str) -> str:
+def host_bytes(blob: bytes, slug: str, content_type: str = "image/jpeg") -> str:
     from late_client import presign_and_upload
 
-    if len(blob) < 2000:
-        raise RuntimeError(f"image too small ({len(blob)} bytes)")
-    url = presign_and_upload(blob, f"{slug}.jpg", "image/jpeg")
-    print("  media   uploaded quote card", url[:70])
+    ext = "mp4" if "video" in content_type else "jpg"
+    minimum = 20000 if ext == "mp4" else 2000
+    if len(blob) < minimum:
+        raise RuntimeError(f"{ext} too small ({len(blob)} bytes)")
+    url = presign_and_upload(blob, f"{slug}.{ext}", content_type)
+    print("  media   uploaded", ext, url[:70])
     return url
 
 
@@ -558,73 +603,60 @@ def run_once(
         recent_takes=(state.get("recent_copy") or []) + _RUN_COPY,
     )
     _RUN_COPY.append((copy.get("twitter") or "")[:180])
-    photo = strict_subject_image(story)
-    credit = credit_line(photo) if photo else ""
-    if credit:
-        fc = (copy.get("ig_first_comment") or "").strip()
-        copy["ig_first_comment"] = (fc + "\n\n" + credit).strip()
-        copy["instagram_first_comment"] = copy["ig_first_comment"]
-    card_bytes: bytes | None = None
-    if photo and photo.get("url"):
-        still = photo["url"]
-        print("IG VISUAL  strict photo", photo.get("title", "")[:60])
-    else:
-        card_bytes = render_quote_card(copy, story)
-        still = ""
-        print("IG VISUAL  quote card of the take")
-        out_dir = HERE / "out" / "cards"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        (out_dir / f"{story.get('id', 'card')}.jpg").write_bytes(card_bytes)
+    out_dir = HERE / "out" / "cards"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    card_bytes = render_quote_card(copy, story)
+    (out_dir / f"{story.get('id', 'card')}.jpg").write_bytes(card_bytes)
+    video_bytes: bytes | None = None
+    try:
+        from motion import render_take_video
+
+        vpath = out_dir / f"{story.get('id', 'card')}.mp4"
+        render_take_video(copy, story, vpath)
+        video_bytes = vpath.read_bytes()
+        print("VISUAL     autoplay take video")
+    except Exception as e:  # noqa: BLE001
+        print("  video   failed, still-only:", e)
+        print("VISUAL     take card (no motion)")
     official = story.get("video_url") or story.get("article_url") or ""
+    still = ""
+    hosted_video = ""
     if live:
         found = resolve_accounts()
         persist_ids(found)
-        hosted = ""
         try:
-            if card_bytes:
-                hosted = host_bytes(card_bytes, story["id"] + "-card")
-            elif still:
-                hosted = host_media(still, story["id"], "image/jpeg")
+            still = host_bytes(card_bytes, story["id"] + "-card")
         except Exception as e:  # noqa: BLE001
-            print("  media   host failed:", e)
+            print("  media   still host failed:", e)
+            still = host_bytes(render_quote_card(copy, story), story["id"] + "-card2")
+        if video_bytes:
             try:
-                hosted = host_bytes(render_quote_card(copy, story), story["id"] + "-card2")
-            except Exception as e2:  # noqa: BLE001
-                print("  media   quote card host failed:", e2)
-        still = hosted
-        if not still:
-            raise SystemExit("Instagram needs a Late-hosted still. Upload failed.")
-    media = {"still": still, "official": official, "photo": photo or {}}
-    if not official and not still:
-        raise SystemExit("No official embed and no rights-safe photo of the subject.")
-
-    if story.get("is_short"):
-        kind_used = "official-short"
-    elif official and ("youtube" in official or "vimeo" in official or "x.com" in official):
-        kind_used = "official-video"
-    elif official:
-        kind_used = "official-link"
+                hosted_video = host_bytes(video_bytes, story["id"] + "-vid", "video/mp4")
+            except Exception as e:  # noqa: BLE001
+                print("  media   video host failed:", e)
+        if not still and not hosted_video:
+            raise SystemExit("Need a Late-hosted take card or video.")
+    if hosted_video or video_bytes:
+        kind_used = "take-video"
     else:
-        kind_used = "cc-photo"
+        kind_used = "take-card"
     print("HEADLINE  ", story["headline"])
-    print("EMBED     ", official or "(none)", "short=" + str(bool(story.get("is_short"))))
-    print("IG PHOTO  ", still or "(skipped — no CC/PD match)")
+    print("SOURCE    ", official or "(none)", "short=" + str(bool(story.get("is_short"))))
+    print("X/IG      ", "autoplay mp4" if (hosted_video or video_bytes) else "take card")
     print("PACKAGED  ", kind_used)
     print("X CHARS   ", copy["twitter_chars"])
     print("X COPY    ", copy["twitter"].replace("\n", " / "))
     th = copy.get("twitter_thread") or []
     if th:
         print("THREAD    ", " || ".join(t.replace("\n", " ")[:60] for t in th))
-    if copy.get("poll_question"):
-        print("POLL      ", copy["poll_question"], "|", " / ".join(copy.get("poll_options") or []))
 
     result = {
         "lane": lane,
         "when": when_s,
         "headline": story["headline"],
         "video_url": official,
-        "still": still,
-        "photo_credit": credit,
+        "still": still or hosted_video,
+        "photo_credit": "",
         "packaged": kind_used,
         "flourish": flourish,
         "copy": copy["twitter"],
@@ -632,47 +664,43 @@ def run_once(
         "status": "dry-run",
     }
     if live:
-        payload = late_payload(
-            story, copy, when_s, cfg, media, extra_reddit=extra_reddit, flourish=flourish
+        stamp = when_s.replace(" ", "T")
+        x_id = submit_late(
+            "twitter",
+            twitter_payload(copy, when_s, cfg, hosted_video, still, flourish),
+            f"eagleeye-x-{story['id']}-{stamp}",
         )
-        idem = f"eagleeye-{story['id']}-{when_s.replace(' ', 'T')}"
-        res = create_post(payload, idempotency_key=idem)
-        post = res.get("post") or res.get("existingPost") or res
-        late_id = str(post.get("_id") or post.get("id") or "")
-        status = str(post.get("status") or "submitted")
-        result["late_id"] = late_id
-        result["status"] = status
-        print("LATE       ", late_id, status)
-        ig_id = ""
-        try:
-            igp = instagram_payload(copy, when_s, cfg, still, flourish)
-            if igp:
-                igres = create_post(
-                    igp,
-                    idempotency_key=f"eagleeye-ig-{story['id']}-{when_s.replace(' ', 'T')}",
-                )
-                igpost = igres.get("post") or igres.get("existingPost") or igres
-                ig_id = str(igpost.get("_id") or igpost.get("id") or "")
-                print("IG LATE    ", ig_id, igpost.get("status"), "mediaItems=1")
-            else:
-                print("IG LATE     skipped — no hosted still or account")
-        except Exception as e:  # noqa: BLE001
-            print("  instagram failed:", e)
+        ig_id = submit_late(
+            "instagram",
+            instagram_payload(copy, when_s, cfg, hosted_video, still, flourish),
+            f"eagleeye-ig-{story['id']}-{stamp}",
+        )
+        rd_id = submit_late(
+            "reddit",
+            reddit_payload(copy, when_s, cfg, official, extra_reddit),
+            f"eagleeye-rd-{story['id']}-{stamp}",
+        )
+        if not x_id and not ig_id:
+            raise SystemExit("X and Instagram both failed — not marking this slot booked.")
+        result["late_id"] = x_id or ig_id
         result["ig_id"] = ig_id
+        result["reddit_id"] = rd_id
+        result["status"] = "scheduled"
         result["flourish"] = flourish
         to_addr = cfg.get("report_email") or os.environ.get("REPORT_EMAIL") or "eagleeyegolfapp@gmail.com"
         body = (
             f"EagleEye Golf App — post scheduled\n\n"
             f"When:      {when_s} America/New_York\n"
             f"Lane:      {lane}\n"
-            f"Flourish:  {flourish}\n"
+            f"X/IG:      native autoplay take video\n"
+            f"Reddit:    official link (separate job)\n"
             f"Headline:  {story['headline']}\n"
-            f"Video:     {story.get('video_url') or '(image only)'}\n"
-            f"Still:     {still}\n"
-            f"Formats:   core + {flourish}\n"
-            f"Late id:   {late_id}\n"
+            f"Source:    {story.get('video_url') or '(none)'}\n"
+            f"Video:     {hosted_video or '(still only)'}\n"
+            f"X id:      {x_id or '(none)'}\n"
             f"IG id:     {ig_id or '(none)'}\n"
-            f"Status:    {status}\n\n"
+            f"Reddit id: {rd_id or '(skipped)'}\n"
+            f"Status:    scheduled\n\n"
             f"Caption:\n{copy['twitter']}\n"
         )
         try:
@@ -681,7 +709,7 @@ def run_once(
             print("  email   failed:", e)
     else:
         print("LATE       dry-run")
-        print("FORMATS    core +", flourish)
+        print("FORMATS    X/IG autoplay + Reddit link")
 
     _RUN_LANES.append(lane)
     keys = story_keys(story)

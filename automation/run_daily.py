@@ -9,9 +9,10 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-_VENV = HERE / ".venv" / "bin" / "python3"
-if _VENV.exists() and Path(sys.executable).resolve() != _VENV.resolve():
-    os.execv(str(_VENV), [str(_VENV), *sys.argv])
+_VENV_DIR = HERE / ".venv"
+_VENV_PY = _VENV_DIR / "bin" / "python3"
+if _VENV_PY.exists() and Path(sys.prefix).resolve() != _VENV_DIR.resolve():
+    os.execv(str(_VENV_PY), [str(_VENV_PY), *sys.argv])
 sys.path.insert(0, str(HERE))
 
 from workflow_one import load_config, load_dotenv  # noqa: E402
@@ -83,7 +84,9 @@ def main() -> None:
                 ok_n += 1
             elif live and st not in {"already-posted", "skipped-day", "dry-run"}:
                 fails += 1
-        except Exception as e:  # noqa: BLE001
+        except KeyboardInterrupt:
+            raise
+        except BaseException as e:  # noqa: BLE001
             print("FAIL      ", e)
             fails += 1
         if fails >= max_fail:

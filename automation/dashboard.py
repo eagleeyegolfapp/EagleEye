@@ -13,10 +13,15 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
-_VENV = HERE / ".venv" / "bin" / "python3"
-if _VENV.exists() and Path(sys.executable).resolve() != _VENV.resolve():
-    os.execv(str(_VENV), [str(_VENV), *sys.argv])
+_VENV_DIR = HERE / ".venv"
+_VENV_PY = _VENV_DIR / "bin" / "python3"
+if _VENV_PY.exists() and Path(sys.prefix).resolve() != _VENV_DIR.resolve():
+    os.execv(str(_VENV_PY), [str(_VENV_PY), *sys.argv])
 HOST, PORT = "127.0.0.1", 8787
+
+
+def _job_python() -> str:
+    return str(_VENV_PY) if _VENV_PY.exists() else sys.executable
 sys.path.insert(0, str(HERE))
 from workflow_one import load_dotenv  # noqa: E402
 
@@ -242,8 +247,8 @@ PAGE = r"""<!doctype html>
       <div class="steps">
         <div class="st" id="st_research"><span class="b"></span><span>Finding a live golf clip</span></div>
         <div class="st" id="st_copy"><span class="b"></span><span>Writing the take</span></div>
-        <div class="st" id="st_photo"><span class="b"></span><span>Matching an Instagram photo</span></div>
-        <div class="st" id="st_pack"><span class="b"></span><span>Packaging X · IG · Reddit</span></div>
+        <div class="st" id="st_photo"><span class="b"></span><span>Building the autoplay video</span></div>
+        <div class="st" id="st_pack"><span class="b"></span><span>Packaging X · IG Reels · Reddit</span></div>
         <div class="st" id="st_late"><span class="b"></span><span>Sending to Late</span></div>
       </div>
       <div class="log" id="ov_log">Starting…</div>
@@ -312,9 +317,9 @@ PAGE = r"""<!doctype html>
       <section class="card" style="margin-bottom:22px">
         <h2>How a post is built</h2>
         <div class="pipe">
-          <div class="step"><div class="num">1</div><div><b>Real clip or article</b><small>Official YouTube, Shorts, Vimeo, or X — linked, never ripped.</small></div></div>
-          <div class="step"><div class="num">2</div><div><b>X + Reddit every time</b><small>One Late post per slot. X is usually a single tweet with the official clip. Reddit is your profile, plus one golf subreddit once a week.</small></div></div>
-          <div class="step"><div class="num">3</div><div><b>Instagram shows the take</b><small>A quote card of the caption — not a random golf photo. A real CC photo only if it clearly matches the player or event.</small></div></div>
+          <div class="step"><div class="num">1</div><div><b>Real clip or article</b><small>We react to official YouTube / news. We never rip and re-upload someone else's file.</small></div></div>
+          <div class="step"><div class="num">2</div><div><b>X + IG autoplay</b><small>Original 9:16 take video. Muted autoplay in the feed — they never have to leave X or Instagram.</small></div></div>
+          <div class="step"><div class="num">3</div><div><b>Reddit gets the source</b><small>Official link post, separate from X/IG so a Reddit rate-limit cannot kill the slot.</small></div></div>
         </div>
       </section>
       <section class="card">
@@ -362,9 +367,9 @@ function paintSteps(text){
     else if (cond && el.className !== "st done") el.className = "st on";
   };
   mark("st_research", /lane|community|news pick|spotlight|finding/.test(t), /headline|embed/.test(t));
-  mark("st_copy", /x copy|x chars|headline|grok/.test(t), /ig photo|ig still|packaged/.test(t));
-  mark("st_photo", /ig still|ig photo/.test(t), /packaged|reddit/.test(t));
-  mark("st_pack", /packaged|reddit|embed/.test(t), /\blate\b/.test(t));
+  mark("st_copy", /x copy|x chars|headline|grok/.test(t), /visual|autoplay|take card|packaged/.test(t));
+  mark("st_photo", /visual|autoplay|ffmpeg|take card|take video/.test(t), /packaged|reddit|twitter/.test(t));
+  mark("st_pack", /packaged|reddit|twitter|instagram|source/.test(t), /\blate\b/.test(t));
   mark("st_late", /\blate\b/.test(t), /scheduled|published|submitted/.test(t));
 }
 async function pollBusy(){
@@ -442,7 +447,7 @@ async function load(){
   if (creating) {
     ban.className = "banner busy";
     document.getElementById("ban_who").textContent = "CREATING A POST";
-    document.getElementById("ban_sub").textContent = "Research → caption → photo → Late. Leave this open until it finishes.";
+    document.getElementById("ban_sub").textContent = "Research → take → autoplay video → Late. Leave this open until it finishes.";
   } else if (d.enabled) {
     ban.className = "banner armed";
     document.getElementById("ban_who").textContent = "ARMED";
@@ -483,7 +488,7 @@ async function load(){
   const ch = (d.community_channels||[]).map(c => `${c.name} | ${c.youtube_id}`).join("\n");
   document.getElementById("channels").value = ch;
   document.getElementById("status").textContent = d.enabled
-    ? "GitHub fills every remaining slot. Late publishes. X/Reddit embed the official clip. IG gets a CC/public-domain photo of the subject."
+    ? "GitHub fills every remaining slot. Late publishes. X and Instagram get a native autoplay take video. Reddit gets the official link."
     : "Paused. Nothing posts until you turn it on and save.";
   const last = d.last;
   const prev = document.getElementById("prev");
@@ -644,7 +649,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/run":
             extra = json.loads(raw.decode() or "{}")
-            cmd = [sys.executable, "-u", str(HERE / "run_daily.py"), "--live", "--kind", "auto"]
+            cmd = [_job_python(), "-u", str(HERE / "run_daily.py"), "--live", "--kind", "auto"]
             kind = "fill" if extra.get("fill") else "next"
             if kind == "next":
                 cmd.append("--one")
@@ -664,7 +669,7 @@ class Handler(BaseHTTPRequestHandler):
             count = str(int(extra.get("count") or 3))
             every = str(float(extra.get("every_hours") or 4))
             cmd = [
-                sys.executable, "-u", str(HERE / "run_daily.py"), "--live",
+                _job_python(), "-u", str(HERE / "run_daily.py"), "--live",
                 "--spotlight", url, "--count", count, "--every-hours", every,
             ]
             started, err = _start_job(cmd, "spotlight")
