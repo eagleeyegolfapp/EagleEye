@@ -330,7 +330,6 @@ PAGE = r"""<!doctype html>
             <button type="button" class="item" data-fmt="stack">Stack + verdict</button>
             <button type="button" class="item" data-fmt="carousel">Carousel — 3 slides</button>
             <div class="dd-lab">Instagram video</div>
-            <button type="button" class="item" data-fmt="avatar">Avatar + voiceover</button>
             <button type="button" class="item" data-fmt="free_video">Cinematic golf B-roll</button>
             <button type="button" class="item" data-fmt="story">Story — 9:16 question</button>
             <div class="dd-lab">X extra</div>
@@ -360,7 +359,7 @@ PAGE = r"""<!doctype html>
         <h2>How a post is built</h2>
         <div class="pipe">
           <div class="step"><div class="num">1</div><div><b>X + Reddit keep the clip</b><small>Official video URL on X. Link post on Reddit. Never ripped.</small></div></div>
-          <div class="step"><div class="num">2</div><div><b>Instagram is a magazine + mix</b><small>Subject-first crop. Cover, meme, stack, split, avatar+VO, free-use golf clip. Type follows the person, not the jpeg center.</small></div></div>
+          <div class="step"><div class="num">2</div><div><b>Instagram is a magazine + mix</b><small>Subject-first crop. Cover, meme, stack, split, cinematic golf B-roll. Type follows the person, not the jpeg center.</small></div></div>
           <div class="step"><div class="num">3</div><div><b>Junk thumbs get a new object</b><small>Title cards and bad crops become a meme, stack, or reel — not a naked YouTube poster.</small></div></div>
         </div>
       </section>
@@ -815,7 +814,7 @@ class Handler(BaseHTTPRequestHandler):
             fmt = str(extra.get("format") or "auto").strip().lower()
             allowed = {
                 "auto", "cover", "broadcast", "split", "scorebug", "editorial",
-                "clean", "meme", "stack", "carousel", "avatar", "free_video",
+                "clean", "meme", "stack", "carousel", "free_video",
                 "story", "thread", "poll",
             }
             if fmt not in allowed:

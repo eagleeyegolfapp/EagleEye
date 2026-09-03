@@ -46,11 +46,13 @@ X poll: poll_question under 180, names the topic. poll_options 3 or 4 answers, E
 Instagram caption: 2-5 short lines. Line 1 = who+what in plain English. Then the joke. Emojis welcome. Do not repeat overlay_hook word for word.
 overlay_hook: 4-8 PLAIN words on the image. Like a TV lower-third. "SCOTTIE RAN THE TABLE" not poetry. No URL. No emoji.
 overlay_question: under 60 chars. Empty if no question.
+meme_top: 2-6 words. Classic meme setup. ALL CAPS energy. Must be a joke, not a news recap.
+meme_bottom: 2-8 words. The punchline. Different from meme_top. Must fit a bar. Funny.
 Reddit title: who+what, under 80 chars. A stranger could read it.
 Reddit body: 1-2 sentences, same clarity. No URL.
 ig_first_comment: ONLY Watch/Read links.
 
-Return JSON only with keys: twitter, twitter_thread, poll_question, poll_options, instagram, overlay_hook, overlay_question, reddit_title, reddit_body, ig_first_comment, mode."""
+Return JSON only with keys: twitter, twitter_thread, poll_question, poll_options, instagram, overlay_hook, overlay_question, meme_top, meme_bottom, reddit_title, reddit_body, ig_first_comment, mode."""
 
 
 def _chat(prompt: str) -> str | None:
@@ -144,6 +146,8 @@ def fallback(story: dict, ask: bool = False) -> dict:
         "instagram": ig,
         "overlay_hook": overlay_hook,
         "overlay_question": overlay_q,
+        "meme_top": "GOLF BEING GOLF",
+        "meme_bottom": "AND WE KEEP COMING BACK",
         "reddit_title": reddit_title,
         "reddit_body": reddit_body,
         "ig_first_comment": comment,
@@ -235,6 +239,8 @@ def write_copy(
             "poll_question",
             "overlay_hook",
             "overlay_question",
+            "meme_top",
+            "meme_bottom",
             "mode",
         ):
             if parsed.get(k):
@@ -331,6 +337,19 @@ def write_copy(
     if len(oq) > 64:
         oq = oq[:61].rsplit(" ", 1)[0].rstrip("?.,") + "?"
     base["overlay_question"] = oq
+    def _meme_clip(raw: str, n: int) -> str:
+        s = re.sub(r"https?://\S+", "", raw or "")
+        s = re.sub(r"\s+", " ", s).strip(" \"'")
+        words = s.split()
+        return " ".join(words[:n]) if len(words) > n else s
+    mt = _meme_clip(base.get("meme_top") or hook, 6)
+    mb = _meme_clip(base.get("meme_bottom") or oq or hook, 8)
+    if not mt:
+        mt = "GOLF BEING GOLF"
+    if not mb or mb.lower() == mt.lower():
+        mb = "AND WE KEEP COMING BACK"
+    base["meme_top"] = mt
+    base["meme_bottom"] = mb
     base["reddit"] = base.get("reddit_body") or base["title"]
     base["title"] = (base.get("title") or base.get("reddit_title") or story.get("headline") or "golf")[:80]
     base["twitter_chars"] = twitter_len(base["twitter"])

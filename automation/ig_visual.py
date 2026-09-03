@@ -55,6 +55,13 @@ _UI_REG = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
 ]
+_IMPACT = [
+    "/System/Library/Fonts/Supplemental/Impact.ttf",
+    "/Library/Fonts/Impact.ttf",
+    "/System/Library/Fonts/Supplemental/Arial Black.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+]
 
 
 def _ff(cands: list, size: int) -> ImageFont.ImageFont:
@@ -577,43 +584,59 @@ def render_cover(photo: Image.Image, kicker: str, mark: str, question: str) -> b
     return _jpeg(img)
 
 
-def render_split(photo: Image.Image, kicker: str, hook: str, question: str) -> bytes:
-    """Photo on top, ink panel below. Reads as a different object on the grid."""
-    panel_h = 520
-    photo_h = FEED_H - panel_h
-    top = photo.resize((FEED_W, FEED_H), Image.Resampling.LANCZOS).crop((0, 0, FEED_W, photo_h))
-    img = Image.new("RGB", (FEED_W, FEED_H), DARK)
-    img.paste(top, (0, 0))
-    # fade photo into the panel
-    fade = Image.new("L", (FEED_W, 70), 0)
-    fp = fade.load()
-    for y in range(70):
-        for x in range(FEED_W):
-            fp[x, y] = int(255 * (y / 69))
-    band = img.crop((0, photo_h - 70, FEED_W, photo_h))
-    img.paste(Image.composite(Image.new("RGB", (FEED_W, 70), DARK), band, fade), (0, photo_h - 70))
-    img = img.convert("RGBA")
+def _cover_crop(im: Image.Image, tw: int, th: int, bias: str = "center") -> Image.Image:
+    """Fill tw×th. Never letterbox. bias left/center/right."""
+    im = im.convert("RGB")
+    scale = max(tw / im.width, th / im.height)
+    nw, nh = max(tw, int(im.width * scale)), max(th, int(im.height * scale))
+    im = im.resize((nw, nh), Image.Resampling.LANCZOS)
+    if bias == "left":
+        x = 0
+    elif bias == "right":
+        x = nw - tw
+    else:
+        x = (nw - tw) // 2
+    y = max(0, (nh - th) // 2)
+    return im.crop((x, y, x + tw, y + th))
+
+
+def render_split(
+    photo: Image.Image,
+    kicker: str,
+    hook: str,
+    question: str,
+    extra: Image.Image | None = None,
+) -> bytes:
+    """Photo fills the whole 4:5. Two different frames if we have them. Type sits on the photo."""
+    if extra is not None:
+        gap = 6
+        half = (FEED_W - gap) // 2
+        left = _cover_crop(photo, half, FEED_H, "left")
+        right = _cover_crop(extra, half, FEED_H, "right")
+        canvas = Image.new("RGB", (FEED_W, FEED_H), DARK)
+        canvas.paste(left, (0, 0))
+        canvas.paste(right, (half + gap, 0))
+        d0 = ImageDraw.Draw(canvas)
+        d0.rectangle([half, 0, half + gap, FEED_H], fill=GOLD)
+        photo_full = canvas
+    else:
+        photo_full = _cover_crop(photo, FEED_W, FEED_H, "center")
+    img = _apply_bottom_dark(photo_full, 0.34, 220).convert("RGBA")
     draw = ImageDraw.Draw(img)
-    draw.rectangle([0, photo_h, FEED_W, photo_h + 4], fill=GOLD)
     kfont = _ff(_UI, 28)
-    _tracked(img, (FEED_W // 2, photo_h + 36), kicker, kfont, GOLD, tracking=7, anchor="mt", shadow=1)
-    draw.line(
-        [(FEED_W // 2 - 32, photo_h + 76), (FEED_W // 2 + 32, photo_h + 76)],
-        fill=GOLD,
-        width=2,
-    )
-    body_w = FEED_W - 140
-    font, lines, size = _fit_lines(draw, hook, body_w, 3 if not question else 2, 54, 34)
-    y = photo_h + 100
+    _tracked(img, (FEED_W // 2, 1008), kicker, kfont, GOLD, tracking=7, anchor="mt", shadow=2)
+    draw.line([(FEED_W // 2 - 36, 1048), (FEED_W // 2 + 36, 1048)], fill=GOLD, width=2)
+    body_w = FEED_W - 120
+    font, lines, size = _fit_lines(draw, hook, body_w, 2 if question else 3, 52, 32)
+    y = 1064
     for ln in lines:
-        _shadow_text(img, (FEED_W // 2, y), ln, font, INK, anchor="mt", shadow=2)
-        y += int(size * 1.14)
+        _shadow_text(img, (FEED_W // 2, y), ln, font, INK, anchor="mt", shadow=3)
+        y += int(size * 1.12)
     if question:
-        qfont = _ff(_UI_REG, 30)
-        y += 10
+        qfont = _ff(_UI_REG, 28)
         for qln in _wrap(draw, question, qfont, body_w, 2):
-            _shadow_text(img, (FEED_W // 2, y), qln, qfont, GOLD, anchor="mt", shadow=2)
-            y += 36
+            _shadow_text(img, (FEED_W // 2, y + 6), qln, qfont, GOLD, anchor="mt", shadow=2)
+            y += 34
     return _jpeg(img)
 
 
@@ -729,28 +752,63 @@ def render_story(photo: Image.Image, kicker: str, question: str, hook: str) -> b
     return _jpeg(img)
 
 
-def render_meme(photo: Image.Image, kicker: str, hook: str, question: str) -> bytes:
-    """Top/bottom bars. Reads as a golf-twitter meme, not a title card."""
-    img = photo.convert("RGBA")
-    bar = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    bd = ImageDraw.Draw(bar)
-    bd.rectangle([0, 0, FEED_W, 210], fill=(7, 8, 10, 210))
-    bd.rectangle([0, FEED_H - 240, FEED_W, FEED_H], fill=(7, 8, 10, 225))
-    img.alpha_composite(bar)
-    draw = ImageDraw.Draw(img)
-    kfont = _ff(_UI, 26)
-    _tracked(img, (FEED_W // 2, 36), kicker, kfont, GOLD, tracking=7, anchor="mt", shadow=1)
-    font, lines, size = _fit_lines(draw, hook.upper(), FEED_W - 80, 2, 52, 34)
-    y = 78
-    for ln in lines:
-        _shadow_text(img, (FEED_W // 2, y), ln, font, INK, anchor="mt", shadow=3)
-        y += int(size * 1.1)
-    text = question or hook
-    qfont, qlines, qsize = _fit_lines(draw, text, FEED_W - 90, 3, 44, 30)
-    y = FEED_H - 220
-    for ln in qlines:
-        _shadow_text(img, (FEED_W // 2, y), ln, qfont, GOLD, anchor="mt", shadow=2)
-        y += int(qsize * 1.14)
+def _meme_line(copy: dict, hook: str, question: str) -> tuple[str, str]:
+    top = (copy.get("meme_top") or hook or "").strip()
+    bot = (copy.get("meme_bottom") or question or "").strip()
+    top = re.sub(r"https?://\S+", "", top)
+    bot = re.sub(r"https?://\S+", "", bot)
+    top = re.sub(r"\s+", " ", top).strip(" \"'")
+    bot = re.sub(r"\s+", " ", bot).strip(" \"'")
+    if not top:
+        top = "GOLF BEING GOLF"
+    if not bot or bot.lower() == top.lower():
+        bot = "AND WE KEEP COMING BACK"
+    # Hard cap so Impact type never overflows the bar.
+    def clip(s: str, n: int) -> str:
+        words = s.split()
+        return " ".join(words[:n]) if len(words) > n else s
+    return clip(top, 6).upper(), clip(bot, 8).upper()
+
+
+def _impact_text(img: Image.Image, xy: tuple[int, int], text: str, font, fill=(255, 255, 255)) -> None:
+    """Classic meme: white fill, thick black stroke."""
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(overlay)
+    x, y = xy
+    for dx, dy in ((-3, 0), (3, 0), (0, -3), (0, 3), (-2, -2), (2, 2), (-2, 2), (2, -2)):
+        d.text((x + dx, y + dy), text, font=font, fill=(0, 0, 0, 255), anchor="mt")
+    d.text((x, y), text, font=font, fill=fill + (255,), anchor="mt")
+    img.alpha_composite(overlay)
+
+
+def render_meme(photo: Image.Image, kicker: str, hook: str, question: str, copy: dict | None = None) -> bytes:
+    """Classic Impact meme on THIS still. Two short lines. They have to fit."""
+    img = _cover_crop(photo, FEED_W, FEED_H).convert("RGBA")
+    top, bot = _meme_line(copy or {}, hook, question)
+    dummy = ImageDraw.Draw(img)
+    max_w = FEED_W - 80
+
+    def fit(text: str, start: int, floor: int, max_lines: int) -> tuple:
+        size = start
+        while size >= floor:
+            font = _ff(_IMPACT, size)
+            lines = _wrap(dummy, text, font, max_w, max_lines + 1)
+            if len(lines) <= max_lines and all(dummy.textlength(ln, font=font) <= max_w for ln in lines):
+                return font, lines, size
+            size -= 4
+        font = _ff(_IMPACT, floor)
+        return font, _wrap(dummy, text, font, max_w, max_lines)[:max_lines], floor
+
+    tfont, tlines, tsize = fit(top, 72, 36, 2)
+    bfont, blines, bsize = fit(bot, 64, 32, 2)
+    y = 48
+    for ln in tlines:
+        _impact_text(img, (FEED_W // 2, y), ln, tfont)
+        y += int(tsize * 1.08)
+    y = FEED_H - 40 - int(bsize * 1.08) * len(blines)
+    for ln in blines:
+        _impact_text(img, (FEED_W // 2, y), ln, bfont, fill=(255, 255, 255))
+        y += int(bsize * 1.08)
     return _jpeg(img)
 
 
@@ -1107,7 +1165,6 @@ def pick_style(
         "clean": 12,
         "meme": 14,
         "stack": 10 if extra_n >= 2 else 4,
-        "avatar": 8,
         "theme_reel": 0,
     }
     if a.get("talking_head"):
@@ -1115,7 +1172,6 @@ def pick_style(
         weights["clean"] = 3
         weights["split"] += 14
         weights["scorebug"] += 10
-        weights["avatar"] += 8
         weights["meme"] += 4
     if a.get("title_card"):
         weights["cover"] = 1
@@ -1123,7 +1179,6 @@ def pick_style(
         weights["broadcast"] = 2
         weights["meme"] += 16
         weights["carousel"] += 8
-        weights["avatar"] += 10
     if a.get("action") and a.get("grid_ok"):
         weights["clean"] += 10
         weights["cover"] += 8
@@ -1228,11 +1283,8 @@ def build_ig_pack(
         elif not video:
             print("  ig      theme_reel failed — not swapping if forced")
     if style == "avatar":
-        video = render_avatar_reel(copy, story, hook, take, still_bytes=still_bytes)
-        if not video and not forced:
-            style = "split"
-        elif not video:
-            print("  ig      avatar forced but failed — not swapping to a still")
+        print("  ig      avatar paused — using split")
+        style = "split"
     if style == "clean":
         slides = [render_clean(photo, kicker)]
     elif style == "editorial":
@@ -1240,11 +1292,11 @@ def build_ig_pack(
     elif style == "cover":
         slides = [render_cover(photo, kicker, mark, q)]
     elif style == "split":
-        slides = [render_split(photo, kicker, hook, q)]
+        slides = [render_split(photo, kicker, hook, q, extra=extra_photos[0] if extra_photos else None)]
     elif style == "scorebug":
         slides = [render_scorebug(photo, kicker, hook)]
     elif style == "meme":
-        slides = [render_meme(photo, kicker, hook, q or take)]
+        slides = [render_meme(photo, kicker, hook, q or take, copy=copy)]
     elif style == "stack":
         stack_photos = [photo] + extra_photos
         if len(stack_photos) < 2:
@@ -1268,7 +1320,7 @@ def build_ig_pack(
         slides = [render_broadcast(photo, kicker, hook, q, show_q=bool(q))]
         style = "broadcast"
 
-    still_to_reel = {"cover", "broadcast", "split", "editorial", "scorebug", "clean"}
+    still_to_reel = {"cover", "broadcast", "editorial", "scorebug", "clean"}
     if (
         not forced
         and not video
