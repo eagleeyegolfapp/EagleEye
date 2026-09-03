@@ -1231,9 +1231,9 @@ def pick_style(
         weights["clean"] += 8
         weights["broadcast"] += 6
     if theme:
-        weights["theme_reel"] = 18
+        weights["theme_reel"] = 28
     if last == "theme_reel":
-        weights["theme_reel"] = 2
+        weights["theme_reel"] = 6
         weights["broadcast"] += 8
     names = [n for n, wt in weights.items() if wt > 0]
     w = [max(1, weights[n]) for n in names]

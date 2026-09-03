@@ -817,13 +817,15 @@ def run_once(
 
     fmt = TEST_FORMATS.get((force_format or "").strip().lower() or "auto") or {}
     want_broll = fmt.get("style") == "free_video"
-    if story is None and not want_broll and not test and lane == "community":
+    if story is None and not want_broll and not test:
         import random as _rng
 
-        if _rng.random() < 0.12:
+        # Best-performing IG format. A little heavier than the rest of the mix.
+        broll_p = 0.22 if lane == "community" else 0.10
+        if _rng.random() < broll_p:
             want_broll = True
             fmt = TEST_FORMATS["free_video"]
-            print("FORMAT     cinematic golf b-roll (community mix)")
+            print("FORMAT     cinematic golf b-roll")
 
     if story is None:
         if want_broll:
