@@ -837,37 +837,45 @@ def render_avatar_reel(copy: dict, story: dict, hook: str, take: str) -> bytes |
 
     bin_ = ffmpeg_bin()
     avatar = Path(__file__).resolve().parent / "assets" / "avatar.jpg"
-    if not bin_ or not avatar.exists():
+    if not bin_:
+        print("  ig      avatar: ffmpeg missing")
+        return None
+    if not avatar.exists():
+        print("  ig      avatar: no assets/avatar.jpg")
         return None
     vo = (hook + ". " + (take or "")).strip()
     vo = re.sub(r"\s+", " ", vo)[:220]
+    print("  ig      avatar TTS…")
     audio = tts(vo, voice="rex")
     if not audio:
+        print("  ig      avatar: TTS returned nothing")
         return None
     out_dir = Path(__file__).resolve().parent / "out" / "ig"
     out_dir.mkdir(parents=True, exist_ok=True)
     wav = out_dir / "avatar-vo.mp3"
     mp4 = out_dir / f"{story.get('id') or 'ig'}-avatar.mp4"
     wav.write_bytes(audio)
-    # 9:16 Ken Burns on the buddy + the voice.
+    # Square portrait → 9:16 cover. Do not crop 1080x1920 out of a 1:1 frame.
     cmd = [
         bin_, "-y",
         "-loop", "1", "-i", str(avatar),
         "-i", str(wav),
         "-filter_complex",
-        "[0:v]scale=1296:1296:force_original_aspect_ratio=increase,crop=1080:1920,"
-        "zoompan=z='min(1.12,1+0.0005*on)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)-80':"
-        "d=240:s=1080x1920:fps=30,format=yuv420p[v]",
+        "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
+        "crop=1080:1920,format=yuv420p,fps=30[v]",
         "-map", "[v]", "-map", "1:a",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-        "-c:a", "aac", "-b:a", "128k", "-shortest", "-t", "12",
+        "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "128k",
+        "-shortest", "-t", "15",
         "-movflags", "+faststart",
         str(mp4),
     ]
     r = __import__("subprocess").run(cmd, capture_output=True, text=True)
     if r.returncode != 0 or not mp4.exists() or mp4.stat().st_size < 40000:
-        print("  ig      avatar reel failed", (r.stderr or "")[-180:].replace("\n", " "))
+        err = (r.stderr or "")[-280:].replace("\n", " ")
+        print("  ig      avatar reel failed", err)
         return None
+    print("  ig      avatar reel", mp4.stat().st_size, "bytes")
     return mp4.read_bytes()
 
 
@@ -980,12 +988,16 @@ def build_ig_pack(
     slides: list[bytes] = []
     if style == "free_video":
         video = render_free_reel(story, hook)
-        if not video:
+        if not video and not forced:
             style = "meme"
+        elif not video:
+            print("  ig      free_video forced but failed — not swapping to a still")
     if style == "avatar":
         video = render_avatar_reel(copy, story, hook, take)
-        if not video:
+        if not video and not forced:
             style = "split"
+        elif not video:
+            print("  ig      avatar forced but failed — not swapping to a still")
     if style == "clean":
         slides = [render_clean(photo, kicker)]
     elif style == "editorial":
@@ -1013,8 +1025,10 @@ def build_ig_pack(
             render_sidebar(photo, kicker, hook),
             render_fight(kicker, q, hook),
         ]
-    elif style in {"avatar", "free_video"} and video:
+    elif style in {"avatar", "free_video"}:
         slides = []
+        if not video:
+            print("  ig      no reel file — Instagram still skipped for this format")
     else:
         slides = [render_broadcast(photo, kicker, hook, q, show_q=bool(q))]
         style = "broadcast"
