@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from captions import write_copy
+from captions import write_broll_copy, write_copy
 from late_client import create_post, persist_ids, resolve_accounts
 from mailer import send_report
 from media import download
@@ -441,21 +441,26 @@ def twitter_payload(
     official: str,
     flourish: str,
     quote_id: str = "",
+    media_url: str = "",
 ) -> dict | None:
-    """X-only job. The official URL must be IN the tweet or X shows caption-only.
+    """X-only job.
 
+    News/community clips: official URL must be IN the tweet or X shows caption-only.
     Native quoteTweetId is silently dropped by X for other people's posts.
-    Putting the status URL in the tweet is what actually embeds their video.
+
+    Cinematic B-roll: no news URL. Attach our video so X autoplays the course.
     """
     acc = os.environ.get("LATE_TWITTER_ACCOUNT_ID", "")
     if not acc:
         return None
-    quote_id = quote_id or x_status_id(official)
+    quote_id = quote_id or (x_status_id(official) if official else "")
     hook = _strip_urls(copy.get("twitter") or "")
-    tweet = f"{hook}\n\n{official}".strip() if official else hook
+    tweet = hook
+    if official and not media_url:
+        tweet = f"{hook}\n\n{official}".strip()
     item: dict = {"platform": "twitter", "accountId": acc, "customContent": tweet}
     psd: dict = {}
-    if flourish == "thread":
+    if flourish == "thread" and not media_url:
         thread = [_strip_urls(t) for t in (copy.get("twitter_thread") or []) if str(t).strip()][:4]
         if official and thread:
             t0 = _strip_urls(thread[0])
@@ -467,9 +472,9 @@ def twitter_payload(
             print("  twitter  thread", len(thread), "tweets")
     elif flourish == "poll":
         print("  twitter  poll skipped — clip embed wins")
-    # Always unfurl the official URL. Do not send quoteTweetId: Late accepts it,
-    # then X publishes caption-only and the quote never appears.
-    if quote_id:
+    if media_url:
+        print("  twitter  native b-roll video")
+    elif quote_id:
         print("  twitter  embed X video", quote_id)
     else:
         print("  twitter  unfurl", (official or "")[:70])
@@ -478,6 +483,8 @@ def twitter_payload(
     payload = _base_late(copy, when, cfg)
     payload["content"] = item["customContent"]
     payload["platforms"] = [item]
+    if media_url:
+        payload["mediaItems"] = [{"url": media_url, "type": "video"}]
     return payload
 
 
@@ -780,102 +787,140 @@ def run_once(
     print(f"LANE       {lane}")
     print(f"WHEN       {when_s} {cfg.get('timezone')}")
 
-    if story is None:
-        if lane == "eagleeye":
-            print("  product lane paused until app footage is ready")
-            lane = pick_lane(cfg, "auto")
-            print(f"LANE       {lane} (was product)")
+    fmt = TEST_FORMATS.get((force_format or "").strip().lower() or "auto") or {}
+    want_broll = fmt.get("style") == "free_video"
+    if story is None and not want_broll and not test and lane == "community":
+        import random as _rng
 
-        kwargs = dict(used_ids=used_ids, used_keys=used_keys, used_creators=used_creators)
-        if lane == "community":
-            try:
-                story = research_community(cfg, **kwargs)
-            except Exception as e:  # noqa: BLE001
-                print(f"  community research failed ({e}); trying news")
-                story = research_news(cfg, **kwargs)
-                lane = "news"
+        if _rng.random() < 0.12:
+            want_broll = True
+            fmt = TEST_FORMATS["free_video"]
+            print("FORMAT     cinematic golf b-roll (community mix)")
+
+    if story is None:
+        if want_broll:
+            from free_media import broll_story
+
+            story = broll_story()
+            lane = "community"
+            print("LANE       community (cinematic golf b-roll)")
         else:
-            try:
-                story = research_news(cfg, **kwargs)
-            except Exception as e:  # noqa: BLE001
-                print(f"  news research failed ({e}); trying community")
-                story = research_community(cfg, **kwargs)
-                lane = "community"
+            if lane == "eagleeye":
+                print("  product lane paused until app footage is ready")
+                lane = pick_lane(cfg, "auto")
+                print(f"LANE       {lane} (was product)")
+
+            kwargs = dict(used_ids=used_ids, used_keys=used_keys, used_creators=used_creators)
+            if lane == "community":
+                try:
+                    story = research_community(cfg, **kwargs)
+                except Exception as e:  # noqa: BLE001
+                    print(f"  community research failed ({e}); trying news")
+                    story = research_news(cfg, **kwargs)
+                    lane = "news"
+            else:
+                try:
+                    story = research_news(cfg, **kwargs)
+                except Exception as e:  # noqa: BLE001
+                    print(f"  news research failed ({e}); trying community")
+                    story = research_community(cfg, **kwargs)
+                    lane = "community"
+
+    is_broll = bool(story.get("broll")) or fmt.get("style") == "free_video"
+    if is_broll:
+        fmt = TEST_FORMATS["free_video"]
+        lane = "community"
 
     _RUN_USED.update(story_keys(story))
     who = story.get("creator") or story.get("video_channel") or ""
-    if who:
+    if who and not is_broll:
         _RUN_CREATORS.append(who)
 
     extra_reddit: list[str] = []
     weekly_patch: dict = {}
-    if story_override is None:
+    if story_override is None and not is_broll:
         extra_reddit, weekly_patch = weekly_reddit_targets(cfg, state)
-    fmt = TEST_FORMATS.get((force_format or "").strip().lower() or "auto") or {}
-    flourish = fmt.get("flourish") or pick_flourish(cfg, state)
+    flourish = "none" if is_broll else (fmt.get("flourish") or pick_flourish(cfg, state))
     _RUN_FLOURISH.append(flourish)
     print(f"FLOURISH   {flourish}  (one extra — not stacked)")
     if fmt.get("style"):
-        print(f"FORMAT     forced {fmt['style']}")
+        print(f"FORMAT     {'b-roll' if is_broll else 'forced'} {fmt['style']}")
 
-    copy = write_copy(
-        story,
-        photo_credit="",
-        angle=angle,
-        angles_total=angles_total,
-        recent_takes=(state.get("recent_copy") or []) + _RUN_COPY,
-    )
-    _RUN_COPY.append((copy.get("twitter") or "")[:180])
-    official = story.get("video_url") or story.get("article_url") or ""
-    if not official:
-        raise SystemExit("No official clip or article URL — will not invent footage.")
-    print("  stills   scoring official frames")
-    stills = official_stills(story, limit=4)
-    still_info = stills[0] if stills else official_still(story)
-    extra_bytes = [s["bytes"] for s in stills[1:3] if s.get("bytes")]
-    if (not test) and still_info and (still_info.get("score") or 50) < 32:
-        try:
-            from media import edit_still
-
-            edited = edit_still(
-                still_info["bytes"],
-                "Keep the same person and pose. Cinematic golf photo grade. "
-                "Remove on-screen captions, logos, and UI pills. Do not change identity.",
-                slug=str(story.get("id") or "edit"),
-            )
-            if edited and len(edited) > 8000:
-                still_info = dict(still_info)
-                still_info["bytes"] = edited
-                still_info["kind"] = (still_info.get("kind") or "still") + "+ai"
-                print("  still   AI-edited official frame")
-        except Exception as e:  # noqa: BLE001
-            print("  still   AI edit skipped:", e)
-    ig_pack = None
-    if still_info and still_info.get("bytes"):
-        ig_pack = build_ig_pack(
-            still_info["bytes"],
-            copy,
+    recent = (state.get("recent_copy") or []) + _RUN_COPY
+    if is_broll:
+        copy = write_broll_copy(story, recent_takes=recent)
+    else:
+        copy = write_copy(
             story,
-            flourish=flourish,
-            last_styles=list(state.get("ig_styles") or []),
-            extra_stills=extra_bytes,
-            force_style=fmt.get("style"),
+            photo_credit="",
+            angle=angle,
+            angles_total=angles_total,
+            recent_takes=recent,
         )
-        if ig_pack:
-            print("VISUAL     IG", ig_pack["style"], "·", still_info.get("kind"))
-        else:
-            print("VISUAL     IG skipped (weak frame) — X/Reddit still go")
-    elif fmt.get("style") in {"avatar", "free_video"}:
+    _RUN_COPY.append((copy.get("twitter") or "")[:180])
+    official = "" if is_broll else (story.get("video_url") or story.get("article_url") or "")
+    if not is_broll and not official:
+        raise SystemExit("No official clip or article URL — will not invent footage.")
+    still_info = None
+    extra_bytes: list[bytes] = []
+    ig_pack = None
+    if is_broll:
+        print("  stills   skipped — cinematic b-roll, not a news still")
         ig_pack = build_ig_pack(
             b"",
             copy,
             story,
             flourish=flourish,
-            force_style=fmt.get("style"),
+            force_style="free_video",
         )
-        print("VISUAL     IG", (ig_pack or {}).get("style") or "skip", "· no still")
+        print("VISUAL     IG", (ig_pack or {}).get("style") or "skip", "· golf b-roll")
     else:
-        print("VISUAL     no official frame — X/Reddit still unfurl")
+        print("  stills   scoring official frames")
+        stills = official_stills(story, limit=4)
+        still_info = stills[0] if stills else official_still(story)
+        extra_bytes = [s["bytes"] for s in stills[1:3] if s.get("bytes")]
+        if (not test) and still_info and (still_info.get("score") or 50) < 32:
+            try:
+                from media import edit_still
+
+                edited = edit_still(
+                    still_info["bytes"],
+                    "Keep the same person and pose. Cinematic golf photo grade. "
+                    "Remove on-screen captions, logos, and UI pills. Do not change identity.",
+                    slug=str(story.get("id") or "edit"),
+                )
+                if edited and len(edited) > 8000:
+                    still_info = dict(still_info)
+                    still_info["bytes"] = edited
+                    still_info["kind"] = (still_info.get("kind") or "still") + "+ai"
+                    print("  still   AI-edited official frame")
+            except Exception as e:  # noqa: BLE001
+                print("  still   AI edit skipped:", e)
+        if still_info and still_info.get("bytes"):
+            ig_pack = build_ig_pack(
+                still_info["bytes"],
+                copy,
+                story,
+                flourish=flourish,
+                last_styles=list(state.get("ig_styles") or []),
+                extra_stills=extra_bytes,
+                force_style=fmt.get("style"),
+            )
+            if ig_pack:
+                print("VISUAL     IG", ig_pack["style"], "·", still_info.get("kind"))
+            else:
+                print("VISUAL     IG skipped (weak frame) — X/Reddit still go")
+        elif fmt.get("style") in {"avatar", "free_video"}:
+            ig_pack = build_ig_pack(
+                b"",
+                copy,
+                story,
+                flourish=flourish,
+                force_style=fmt.get("style"),
+            )
+            print("VISUAL     IG", (ig_pack or {}).get("style") or "skip", "· no still")
+        else:
+            print("VISUAL     no official frame — X/Reddit still unfurl")
     hosted_slides: list[str] = []
     hosted_story = ""
     hosted_video = ""
@@ -896,17 +941,19 @@ def run_once(
                 print("  media   IG host failed:", e)
                 hosted_slides, hosted_story, hosted_video = [], "", ""
     still = (hosted_slides[0] if hosted_slides else "") or ((still_info or {}).get("url") or "")
-    quote_id = str(story.get("x_status_id") or x_status_id(official) or "")
-    yid_like = "youtube" in official or "youtu.be" in official or "vimeo.com" in official
-    x_like = bool(quote_id) or "x.com/" in official or "twitter.com/" in official
-    if quote_id:
+    quote_id = "" if is_broll else str(story.get("x_status_id") or x_status_id(official) or "")
+    yid_like = (not is_broll) and ("youtube" in official or "youtu.be" in official or "vimeo.com" in official)
+    x_like = (not is_broll) and (bool(quote_id) or "x.com/" in official or "twitter.com/" in official)
+    if is_broll:
+        kind_used = "golf-broll"
+    elif quote_id:
         kind_used = "x-quote-video"
     elif yid_like or x_like:
         kind_used = "official-video"
     else:
         kind_used = "official-link"
     print("HEADLINE  ", story["headline"])
-    print("SOURCE    ", official, "short=" + str(bool(story.get("is_short"))))
+    print("SOURCE    ", official or "(cinematic golf b-roll)", "short=" + str(bool(story.get("is_short"))))
     print("IG        ", (ig_pack or {}).get("style") or "skip", still or "")
     print("PACKAGED  ", kind_used)
     print("X CHARS   ", copy["twitter_chars"])
@@ -933,7 +980,15 @@ def run_once(
         stamp = when_s.replace(" ", "T")
         x_id = submit_late(
             "twitter",
-            twitter_payload(copy, when_s, cfg, official, flourish, quote_id=quote_id),
+            twitter_payload(
+                copy,
+                when_s,
+                cfg,
+                official,
+                flourish,
+                quote_id=quote_id,
+                media_url=hosted_video if is_broll else "",
+            ),
             f"eagleeye-x-{story['id']}-{stamp}",
             fallback_url=official if quote_id else "",
         )
@@ -972,9 +1027,9 @@ def run_once(
             f"EagleEye Golf App — post scheduled\n\n"
             f"When:      {when_s} America/New_York\n"
             f"Lane:      {lane}\n"
-            f"X:         quote/embed official video so it autoplays\n"
+            f"X:         {'native golf b-roll video' if is_broll else 'quote/embed official video so it autoplays'}\n"
             f"Instagram: {(ig_pack or {}).get('style') or 'skipped'}\n"
-            f"Reddit:    official link\n"
+            f"Reddit:    {'text about the game' if is_broll else 'official link'}\n"
             f"Headline:  {story['headline']}\n"
             f"Source:    {official}\n"
             f"Still:     {still or '(none)'}\n"

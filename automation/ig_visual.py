@@ -789,45 +789,97 @@ def render_stack(photos: list[Image.Image], kicker: str, hook: str, verdict: str
     return _jpeg(img)
 
 
+def _broll_overlay_png(hook: str, dest: Path) -> None:
+    """Gold kicker + magazine hook over cinematic golf B-roll. Transparent PNG."""
+    img = Image.new("RGBA", (STORY_W, STORY_H), (0, 0, 0, 0))
+    shade = Image.new("RGBA", (STORY_W, STORY_H), (0, 0, 0, 0))
+    pix = shade.load()
+    for y in range(0, 520):
+        a = int(170 * (1 - y / 520) ** 1.15)
+        for x in range(STORY_W):
+            pix[x, y] = (7, 8, 10, a)
+    img.alpha_composite(shade)
+    draw = ImageDraw.Draw(img)
+    kfont = _ff(_UI, 28)
+    _tracked(img, (STORY_W // 2, 72), "GOLF", kfont, GOLD, tracking=10, anchor="mt", shadow=2)
+    draw.rectangle([STORY_W // 2 - 40, 108, STORY_W // 2 + 40, 111], fill=GOLD + (220,))
+    font, lines, size = _fit_lines(draw, hook or "THE COURSE DOESN'T CARE", STORY_W - 120, 3, 52, 34)
+    y = 130
+    for ln in lines:
+        _shadow_text(img, (STORY_W // 2, y), ln, font, INK, anchor="mt", shadow=3)
+        y += int(size * 1.14)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    img.save(dest)
+
+
 def render_free_reel(story: dict, hook: str) -> bytes | None:
-    """CC golf clip, trimmed 9:16. Never a Tour broadcast file."""
-    from free_media import download_free, pick_free_clip
+    """Hand-picked cinematic golf B-roll, 9:16, 12s. Never Commons lottery."""
+    from free_media import clip_urls, local_broll, pick_free_clip
     from motion import ffmpeg_bin
 
     bin_ = ffmpeg_bin()
     if not bin_:
+        print("  ig      b-roll: ffmpeg missing")
         return None
     out_dir = Path(__file__).resolve().parent / "out" / "ig"
     out_dir.mkdir(parents=True, exist_ok=True)
-    src = out_dir / "free-src.bin"
-    mp4 = out_dir / f"{story.get('id') or 'ig'}-free.mp4"
-    local = list((Path(__file__).resolve().parent / "broll").glob("*.mp4")) + list(
-        (Path(__file__).resolve().parent / "broll").glob("*.mov")
+    work = out_dir / "broll-work"
+    work.mkdir(parents=True, exist_ok=True)
+    overlay = work / "overlay.png"
+    _broll_overlay_png(hook, overlay)
+    mp4 = out_dir / f"{story.get('id') or 'ig'}-broll.mp4"
+    sources: list[str] = []
+    owned = local_broll()
+    if owned:
+        sources.append(str(random.choice(owned)))
+        print("  ig      local owned b-roll")
+    clip = (story.get("clip") if isinstance(story.get("clip"), dict) else None) or pick_free_clip()
+    if clip:
+        sources.extend(clip_urls(clip))
+        print("  ig      catalog", clip.get("id"), (clip.get("title") or "")[:48])
+    vf = (
+        "scale=1080:1920:force_original_aspect_ratio=increase,"
+        "crop=1080:1920,"
+        "eq=contrast=1.06:saturation=1.12:brightness=0.02,"
+        "fps=30,format=yuv420p,setsar=1"
     )
-    if local:
-        src.write_bytes(random.choice(local).read_bytes())
-        print("  ig      local b-roll")
-    else:
-        clip = pick_free_clip()
-        if not clip:
-            return None
-        blob = download_free(clip["url"])
-        if not blob:
-            return None
-        src.write_bytes(blob)
-        print("  ig      free-use", clip.get("license") or "CC", clip["url"][:60])
-    cmd = [
-        bin_, "-y", "-i", str(src), "-t", "9",
-        "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,format=yuv420p",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
-        "-an", "-movflags", "+faststart",
-        str(mp4),
-    ]
-    r = __import__("subprocess").run(cmd, capture_output=True, text=True)
-    if r.returncode != 0 or not mp4.exists() or mp4.stat().st_size < 40000:
-        print("  ig      free reel failed", (r.stderr or "")[-160:].replace("\n", " "))
-        return None
-    return mp4.read_bytes()
+    ua = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+    )
+    for src in sources:
+        cmd = [
+            bin_, "-y",
+            "-user_agent", ua,
+            "-ss", "2",
+            "-i", src,
+            "-loop", "1", "-i", str(overlay),
+            "-f", "lavfi", "-t", "13", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+            "-filter_complex",
+            f"[0:v]{vf}[bg];[1:v]format=rgba,scale=1080:1920[ov];"
+            "[bg][ov]overlay=0:0:format=auto[v]",
+            "-map", "[v]", "-map", "2:a",
+            "-t", "12",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+            "-profile:v", "high", "-level", "4.1",
+            "-pix_fmt", "yuv420p", "-r", "30",
+            "-c:a", "aac", "-ac", "2", "-ar", "44100", "-b:a", "96k",
+            "-shortest",
+            "-movflags", "+faststart",
+            str(mp4),
+        ]
+        try:
+            r = __import__("subprocess").run(cmd, capture_output=True, text=True, timeout=90)
+        except Exception as e:  # noqa: BLE001
+            print("  ig      b-roll encode timeout/error", src.split("/")[-1][:40], e)
+            continue
+        if r.returncode == 0 and mp4.exists() and mp4.stat().st_size > 80_000:
+            print("  ig      b-roll reel", mp4.stat().st_size, "bytes")
+            return mp4.read_bytes()
+        err = (r.stderr or "")[-220:].replace("\n", " ")
+        print("  ig      b-roll encode miss", src.split("/")[-1][:40], err)
+    print("  ig      b-roll failed — no cinematic clip encoded")
+    return None
 
 
 def _circle_head(src: Path, dest: Path, size: int = 340, ring: int = 8) -> None:
@@ -979,7 +1031,6 @@ def pick_style(
         "meme": 14,
         "stack": 10 if extra_n >= 2 else 4,
         "avatar": 8,
-        "free_video": 7,
     }
     if a.get("talking_head"):
         weights["cover"] = 2
@@ -1123,7 +1174,7 @@ def build_ig_pack(
     if story_bytes:
         (out_dir / f"{sid}-story.jpg").write_bytes(story_bytes)
     if video:
-        (out_dir / f"{sid}-avatar.mp4").write_bytes(video)
+        (out_dir / f"{sid}-reel.mp4").write_bytes(video)
     print(f"  ig      {style} · {len(slides)} slide(s)" + (" + story" if story_bytes else "") + (" + reel" if video else ""))
     return {
         "style": style,

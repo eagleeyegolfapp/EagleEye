@@ -1,91 +1,171 @@
 #!/usr/bin/env python3
-"""Free-use golf clips (Wikimedia Commons). Never a Tour broadcast file."""
+"""Hand-picked cinematic golf B-roll. Pexels license. Never random Commons junk.
+
+Every URL was opened and the first frame inspected. Keep only drone / fairway /
+green / bunker / water-hazard golf. Reject gym, code, ocean, city, trees-only.
+"""
 from __future__ import annotations
 
-import json
 import random
-import urllib.parse
 import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-UA = "EagleEyeGolfApp/1.0 (golf app; eagleeyegolfapp@gmail.com)"
-MAX_BYTES = 28_000_000
+UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+)
+MAX_BYTES = 80_000_000
 
-# Known-good CC clips so a dead search still has something real to post.
-SEED = [
-    "https://upload.wikimedia.org/wikipedia/commons/2/2e/Golf_swing_practice_-_Kanagawa_-_slow_motion_-_2023_June_13.webm",
-    "https://upload.wikimedia.org/wikipedia/commons/0/0e/Manpracticinggolfswing-slowmotion-2021-3-24.webm",
-    "https://upload.wikimedia.org/wikipedia/commons/9/9e/Suvichaya_Vinijchaitham_Golf_Swing_Slow_Mo_2026.webm",
+# weight: higher = more likely. 4K and the widest cinematic drones win.
+CATALOG = [
+    {
+        "id": "3214020",
+        "title": "4K aerial over a mountain golf course",
+        "url": "https://videos.pexels.com/video-files/3214020/3214020-uhd_3840_2160_25fps.mp4",
+        "fallbacks": [
+            "https://videos.pexels.com/video-files/3214020/3214020-hd_1920_1080_25fps.mp4",
+        ],
+        "license": "Pexels",
+        "credit": "Pexels",
+        "weight": 3,
+    },
+    {
+        "id": "17239356",
+        "title": "High drone over a full golf course, ponds and bunkers",
+        "url": "https://videos.pexels.com/video-files/17239356/17239356-hd_1920_1080_30fps.mp4",
+        "license": "Pexels",
+        "credit": "Pexels",
+        "weight": 3,
+    },
+    {
+        "id": "15508702",
+        "title": "Seaside golf course, bunkers and lagoons",
+        "url": "https://videos.pexels.com/video-files/15508702/15508702-hd_1920_1080_30fps.mp4",
+        "license": "Pexels",
+        "credit": "HUAHIN PILOT LAND / Pexels",
+        "weight": 3,
+    },
+    {
+        "id": "854337",
+        "title": "Palm-lined green, bunkers, desert light",
+        "url": "https://videos.pexels.com/video-files/854337/854337-hd_1920_1080_30fps.mp4",
+        "license": "Pexels",
+        "credit": "Pixabay / Pexels",
+        "weight": 3,
+    },
+    {
+        "id": "18138326",
+        "title": "Drone over a striped fairway and pond",
+        "url": "https://videos.pexels.com/video-files/18138326/18138326-hd_1920_1080_30fps.mp4",
+        "license": "Pexels",
+        "credit": "Jaxon Matthew Willis / Pexels",
+        "weight": 2,
+    },
+    {
+        "id": "18138335",
+        "title": "High aerial of mowed fairways and a creek",
+        "url": "https://videos.pexels.com/video-files/18138335/18138335-hd_1920_1080_30fps.mp4",
+        "license": "Pexels",
+        "credit": "Jaxon Matthew Willis / Pexels",
+        "weight": 2,
+    },
+    {
+        "id": "18138329",
+        "title": "Wide aerial: bunkers, pond, tree-lined holes",
+        "url": "https://videos.pexels.com/video-files/18138329/18138329-hd_1920_1080_30fps.mp4",
+        "license": "Pexels",
+        "credit": "Jaxon Matthew Willis / Pexels",
+        "weight": 2,
+    },
+    {
+        "id": "18138331",
+        "title": "Overhead of a hole wrapping a creek",
+        "url": "https://videos.pexels.com/video-files/18138331/18138331-hd_1920_1080_30fps.mp4",
+        "license": "Pexels",
+        "credit": "Jaxon Matthew Willis / Pexels",
+        "weight": 1,
+    },
+    {
+        "id": "18451070",
+        "title": "Top-down green, bunkers, water",
+        "url": "https://videos.pexels.com/video-files/18451070/18451070-hd_1920_1080_30fps.mp4",
+        "license": "Pexels",
+        "credit": "Pexels",
+        "weight": 2,
+    },
+    {
+        "id": "18451072",
+        "title": "Overhead greens along the water",
+        "url": "https://videos.pexels.com/video-files/18451072/18451072-hd_1920_1080_30fps.mp4",
+        "license": "Pexels",
+        "credit": "Pexels",
+        "weight": 2,
+    },
 ]
 
 
-def _get(url: str, timeout: int = 45) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read()
-
-
-def search_commons(query: str = "golf swing", limit: int = 8) -> list[dict]:
-    q = urllib.parse.urlencode(
-        {
-            "action": "query",
-            "format": "json",
-            "generator": "search",
-            "gsrsearch": f"{query} filetype:video",
-            "gsrnamespace": "6",
-            "gsrlimit": str(limit),
-            "prop": "imageinfo",
-            "iiprop": "url|mime|size|extmetadata",
-        }
-    )
-    try:
-        data = json.loads(_get("https://commons.wikimedia.org/w/api.php?" + q, timeout=20).decode())
-    except Exception as e:  # noqa: BLE001
-        print("  free    commons search failed:", e)
+def local_broll() -> list[Path]:
+    folder = HERE / "broll"
+    if not folder.is_dir():
         return []
-    out = []
-    for p in (data.get("query") or {}).get("pages", {}).values():
-        info = (p.get("imageinfo") or [{}])[0]
-        url = info.get("url") or ""
-        size = int(info.get("size") or 0)
-        mime = (info.get("mime") or "").lower()
-        if not url or size < 400_000 or size > MAX_BYTES:
-            continue
-        if "video" not in mime and "ogg" not in mime:
-            continue
-        license_ = ""
-        meta = info.get("extmetadata") or {}
-        if isinstance(meta, dict):
-            license_ = (meta.get("LicenseShortName") or {}).get("value") or ""
-        out.append(
-            {
-                "url": url,
-                "title": p.get("title") or "golf clip",
-                "license": license_ or "CC",
-                "bytes": size,
-            }
-        )
+    return [p for p in list(folder.glob("*.mp4")) + list(folder.glob("*.mov")) if p.stat().st_size > 200_000]
+
+
+def clip_urls(clip: dict) -> list[str]:
+    urls = [clip["url"]] + list(clip.get("fallbacks") or [])
+    seen: set[str] = set()
+    out: list[str] = []
+    for u in urls:
+        if u and u not in seen:
+            seen.add(u)
+            out.append(u)
     return out
 
 
 def pick_free_clip(used: set[str] | None = None) -> dict | None:
     used = used or set()
-    hits = search_commons("golf swing") + search_commons("golf course")
-    random.shuffle(hits)
-    for h in hits + [{"url": u, "title": "golf swing", "license": "CC"} for u in SEED]:
-        if h["url"] in used:
-            continue
-        return h
-    return None
+    bag = [c for c in CATALOG if c["url"] not in used and c["id"] not in used]
+    if not bag:
+        bag = list(CATALOG)
+    weights = [max(1, int(c.get("weight") or 1)) for c in bag]
+    return dict(random.choices(bag, weights=weights, k=1)[0])
+
+
+def _get(url: str, timeout: int = 60) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "video/mp4,video/*,*/*"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read(MAX_BYTES + 1)
 
 
 def download_free(url: str) -> bytes | None:
     try:
         blob = _get(url, timeout=90)
     except Exception as e:  # noqa: BLE001
-        print("  free    download failed:", e)
+        print("  broll   download failed:", e)
         return None
-    if not blob or len(blob) < 80_000:
+    if not blob or len(blob) < 400_000:
+        print("  broll   file too small", 0 if not blob else len(blob))
+        return None
+    if len(blob) > MAX_BYTES:
+        print("  broll   file too large, skip")
         return None
     return blob
+
+
+def broll_story(clip: dict | None = None) -> dict:
+    clip = clip or pick_free_clip() or CATALOG[0]
+    return {
+        "id": f"broll-{clip['id']}",
+        "lane": "community",
+        "headline": "The game",
+        "creator": "GOLF",
+        "video_channel": "GOLF",
+        "video_url": clip["url"],
+        "article_url": "",
+        "excerpt": clip.get("title") or "Cinematic golf course aerial",
+        "broll": True,
+        "license": clip.get("license") or "Pexels",
+        "credit": clip.get("credit") or "",
+        "clip": clip,
+    }

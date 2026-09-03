@@ -331,7 +331,7 @@ PAGE = r"""<!doctype html>
             <button type="button" class="item" data-fmt="carousel">Carousel — 3 slides</button>
             <div class="dd-lab">Instagram video</div>
             <button type="button" class="item" data-fmt="avatar">Avatar + voiceover</button>
-            <button type="button" class="item" data-fmt="free_video">Free-use golf clip</button>
+            <button type="button" class="item" data-fmt="free_video">Cinematic golf B-roll</button>
             <button type="button" class="item" data-fmt="story">Story — 9:16 question</button>
             <div class="dd-lab">X extra</div>
             <button type="button" class="item" data-fmt="thread">Thread</button>

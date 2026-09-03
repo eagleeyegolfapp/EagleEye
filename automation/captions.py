@@ -366,3 +366,234 @@ def write_copy(
         base["instagram_first_comment"] = base["ig_first_comment"]
         base["twitter_chars"] = twitter_len(base["twitter"])
     return base
+
+
+BROLL_SYSTEM = """You write captions for cinematic golf-course B-roll.
+
+This is NOT news. There is no player, no tournament, no clip to recap.
+The video is a drone over a golf course. The caption is about the GAME of golf.
+
+Goal: people who play stop scrolling. Replies, quote-tweets, saves.
+
+Pick ONE mode and commit:
+- hot_take: a verdict about golf as a sport. You already decided.
+- joke: PG-13 golf humor. Specific. No cussing (no f-words, s-words, a-holes). Hell, damn, crap, sucks, mid, cooked are fine.
+- question: ONE fight golfers will actually answer. Never "thoughts?" or "agree?".
+- story: 2-3 short lines that set a scene on a course, then punch.
+- one_liner: one sentence. Stop.
+
+Rules:
+- Write about golf itself: the first tee, the walk, the lie, the score you won't tell anyone, why people keep coming back, the silence, the 4-footer that wrecks a Saturday.
+- Do NOT mention a player, a tour, a tournament, a news story, or a specific famous course by name.
+- Do NOT pretend we filmed this. Do not say "we shot this" or "our course".
+- Do NOT start with "X really posted this" or "That's the news" or "That's the clip."
+- Emojis: 0-3, only if they land (⛳ 👀 😭 🔥 😅 🫡). No hashtag soup.
+- Never write "link in comments", "full video below", or "link in bio".
+- Do not put URLs anywhere. There is no article to watch.
+- Never mention EagleEye, App Store, unlock, subscription, ads, or download.
+- X tweet (twitter): under 200 characters. No URL. Must stand alone.
+- X thread: exactly 3 tweets, each under 200, no URLs.
+- X poll: poll_question under 180. poll_options 3 or 4 answers, EACH 25 chars max.
+- Instagram caption: 2-5 short lines. The video already has overlay_hook on it. Line breaks. Do not repeat overlay_hook word for word.
+- overlay_hook: 4-8 words ON the video. Magazine cover line. No emoji. About the game.
+- overlay_question: under 60 chars. Empty if this post has no question.
+- Reddit title: debate hook about golf, under 80 chars.
+- Reddit body: 1-2 sentences. No URL.
+- ig_first_comment: empty string.
+
+Return JSON only with keys: twitter, twitter_thread, poll_question, poll_options, instagram, overlay_hook, overlay_question, reddit_title, reddit_body, ig_first_comment, mode."""
+
+
+_BROLL_FALLBACKS = [
+    (
+        "Golf is the only sport where you pay to be embarrassed in front of people you like.",
+        "Eighteen holes. No clock. Nowhere to hide.",
+        "THE COURSE DOESN'T CARE",
+        "hot_take",
+    ),
+    (
+        "If you can explain why you keep coming back, you haven't played enough.",
+        "You tell yourself it's the walk. It's not the walk.",
+        "WHY WE KEEP WALKING",
+        "one_liner",
+    ),
+    (
+        "A grown adult whispering at a ball they just paid $4 to lose.",
+        "That's not a sport. That's a personality.",
+        "WHISPER AT THE BALL",
+        "joke",
+    ),
+    (
+        "The first tee doesn't care what you shot last week.",
+        "That's the deal. You take it or you stay in the parking lot.",
+        "THE FIRST TEE KNOWS",
+        "story",
+    ),
+    (
+        "Handicap is a rumor you tell yourself until the first bunker.",
+        "The grass is honest. You are not.",
+        "THE GRASS IS HONEST",
+        "hot_take",
+    ),
+    (
+        "Four hours, one honest version of yourself, and a card you might not keep.",
+        "That's golf. Everything else is merch.",
+        "ONE HONEST VERSION",
+        "story",
+    ),
+]
+
+
+def _broll_fallback(ask: bool = False) -> dict:
+    tw, ig_rest, hook, mode = random.choice(_BROLL_FALLBACKS)
+    ig = f"{tw}\n\n{ig_rest}"
+    reddit_title = (hook.title() if len(hook) < 80 else tw)[:80]
+    if ask:
+        tw = tw.rstrip(".!") + ". What's the lie you tell yourself on the first tee?"
+    return {
+        "twitter": tw,
+        "twitter_thread": [
+            tw[:180],
+            ig_rest[:180],
+            ("What's the shot you still think about?" if ask else "Walk it off.")[:180],
+        ],
+        "poll_question": "What actually keeps you coming back?",
+        "poll_options": ["The walk", "The card", "The people", "Can't explain it"],
+        "instagram": ig,
+        "overlay_hook": hook,
+        "overlay_question": "What's the lie on the first tee?" if ask else "",
+        "reddit_title": reddit_title,
+        "reddit_body": tw,
+        "ig_first_comment": "",
+        "title": reddit_title,
+        "mode": mode,
+    }
+
+
+def write_broll_copy(story: dict, recent_takes: list[str] | None = None) -> dict:
+    """Captions about the game of golf. Never a news restatement."""
+    modes = ["hot_take", "joke", "question", "story", "one_liner"]
+    mode = random.choices(modes, weights=[22, 20, 18, 22, 18], k=1)[0]
+    ask = mode == "question"
+    user = (
+        f"MODE for this post (commit to it): {mode}\n"
+        "The video is cinematic drone B-roll of a golf course. Fairways, greens, water, bunkers.\n"
+        "Write about the GAME. Not the footage. Not a player. Not a tournament.\n"
+    )
+    if ask:
+        user += "End with one specific question golfers will argue about. Not 'thoughts?'.\n"
+    else:
+        user += "No question. Land the take and stop.\n"
+    recent = [t for t in (recent_takes or []) if t][-8:]
+    if recent:
+        user += "Do not repeat these recent takes:\n"
+        for t in recent:
+            user += f"- {t.replace(chr(10), ' ')[:160]}\n"
+
+    print("  copy     b-roll take about the game…")
+    parsed = _parse_json(_chat_broll(user) or "")
+    print("  copy     ", (parsed.get("mode") if parsed else "fallback"))
+    base = _broll_fallback(ask=ask)
+    if parsed:
+        for k in (
+            "twitter",
+            "instagram",
+            "reddit_title",
+            "reddit_body",
+            "poll_question",
+            "overlay_hook",
+            "overlay_question",
+            "mode",
+        ):
+            if parsed.get(k):
+                base[k] = str(parsed[k]).strip()
+        if parsed.get("reddit_title"):
+            base["title"] = str(parsed["reddit_title"]).strip()[:80]
+        th = parsed.get("twitter_thread")
+        if isinstance(th, list) and len(th) >= 2:
+            base["twitter_thread"] = [str(x).strip() for x in th if str(x).strip()][:4]
+        opts = _clean_poll_options(parsed.get("poll_options"))
+        if opts:
+            base["poll_options"] = opts
+
+    tw = re.sub(r"\s*https?://\S+", "", base["twitter"].strip()).strip()
+    if twitter_len(tw) > 240:
+        tw = _trim_tweet(tw, 240)
+    base["twitter"] = tw
+    thread = [
+        _trim_tweet(re.sub(r"\s*https?://\S+", "", t))
+        for t in (base.get("twitter_thread") or [])
+        if str(t).strip()
+    ]
+    if len(thread) < 2:
+        thread = [tw[:180] or "Golf being golf.", "The course doesn't care.", "Walk it off."]
+    base["twitter_thread"] = thread[:4]
+    pq = _trim_tweet(base.get("poll_question") or "What keeps you coming back?", 180)
+    base["poll_question"] = pq
+    opts = _clean_poll_options(base.get("poll_options"))
+    if not opts:
+        opts = ["The walk", "The card", "The people", "Can't explain"]
+    base["poll_options"] = opts
+    body = (base.get("reddit_body") or base.get("title") or "").strip()
+    body = re.sub(r"\s*https?://\S+", "", body).strip()
+    base["reddit_body"] = body
+    base["reddit"] = body
+    base["ig_first_comment"] = ""
+    base["instagram_first_comment"] = ""
+    ig_cap = re.sub(r"https?://\S+", "", base.get("instagram") or "").strip()
+    ig_cap = "\n".join(ln for ln in ig_cap.splitlines() if not ln.lower().startswith("photo:")).strip()
+    base["instagram"] = ig_cap
+    hook = re.sub(r"https?://\S+", "", (base.get("overlay_hook") or "")).strip()
+    hook = re.sub(r"\s+", " ", hook)
+    if not hook:
+        hook = " ".join(tw.split()[:7]).rstrip(".!,") or "THE COURSE DOESN'T CARE"
+    if len(hook.split()) > 8:
+        hook = " ".join(hook.split()[:8])
+    if len(hook) > 52:
+        hook = hook[:50].rsplit(" ", 1)[0]
+    base["overlay_hook"] = hook
+    oq = re.sub(r"https?://\S+", "", (base.get("overlay_question") or "")).strip()
+    oq = re.sub(r"\s+", " ", oq)
+    if len(oq) > 64:
+        oq = oq[:61].rsplit(" ", 1)[0].rstrip("?.,") + "?"
+    base["overlay_question"] = oq
+    base["title"] = (base.get("title") or base.get("reddit_title") or "The game")[:80]
+    base["twitter_chars"] = twitter_len(base["twitter"])
+    banned = ("apps.apple.com", "unlock", "subscription", "download eagleeye")
+    blob = f"{base['twitter']}\n{base['instagram']}\n{base['reddit']}".lower()
+    if any(b in blob for b in banned):
+        print("  copy     model mentioned product — using b-roll fallback")
+        base = _broll_fallback(ask=ask)
+        base["twitter_chars"] = twitter_len(base["twitter"])
+        base["reddit"] = base.get("reddit_body") or base["title"]
+        base["instagram_first_comment"] = ""
+    return base
+
+
+def _chat_broll(prompt: str) -> str | None:
+    key = (os.environ.get("XAI_API_KEY") or "").strip()
+    if not key:
+        return None
+    model = os.environ.get("XAI_TEXT_MODEL", "grok-4")
+    body = {
+        "model": model,
+        "temperature": 1.05,
+        "messages": [
+            {"role": "system", "content": BROLL_SYSTEM},
+            {"role": "user", "content": prompt},
+        ],
+    }
+    req = urllib.request.Request(
+        f"{XAI}/chat/completions",
+        data=json.dumps(body).encode(),
+        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=22, context=CTX) as resp:
+            data = json.loads(resp.read().decode())
+        return data["choices"][0]["message"]["content"]
+    except Exception as e:  # noqa: BLE001
+        print(f"  grok b-roll copy failed: {e}")
+        return None
+
