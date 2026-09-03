@@ -943,6 +943,7 @@ def build_ig_pack(
     flourish: str = "none",
     last_styles: list[str] | None = None,
     extra_stills: list[bytes] | None = None,
+    force_style: str | None = None,
 ) -> dict | None:
     from subject import analyze
 
@@ -958,13 +959,15 @@ def build_ig_pack(
     q = overlay_question(copy, question)
     sid = str(story.get("id") or "ig")
     analysis = analyze(src) if src is not None else {}
-    if weak or analysis.get("title_card"):
-        # Do not skip IG. Swap the object.
-        style_hint = "meme"
-    else:
-        style_hint = None
     photo = smart_crop(src, FEED_W, FEED_H, analysis=analysis) if src is not None else Image.new("RGB", (FEED_W, FEED_H), DARK)
-    style = style_hint or pick_style(sid, last_styles or [], bool(q), flourish, analysis, extra_n=1 + len(extras))
+    forced = (force_style or "").strip().lower() or None
+    if forced:
+        style = forced
+        print(f"  ig      forced {style}")
+    elif weak or analysis.get("title_card"):
+        style = "meme"
+    else:
+        style = pick_style(sid, last_styles or [], bool(q), flourish, analysis, extra_n=1 + len(extras))
     mark = cover_mark(hook)
     extra_photos = []
     for blob in extras[:3]:

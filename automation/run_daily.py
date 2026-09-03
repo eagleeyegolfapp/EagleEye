@@ -35,6 +35,7 @@ def main() -> None:
     )
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--test", action="store_true", help="One post, publish now, do not consume a clock slot")
+    ap.add_argument("--format", dest="fmt", default=os.environ.get("TEST_FORMAT") or "auto")
     args = ap.parse_args()
     live = args.live and not args.dry_run
     print("EagleEye daily runner")
@@ -64,7 +65,8 @@ def main() -> None:
 
         when = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M")
         print("TEST NOW  one post, publish immediately, does not take a daily slot")
-        run_once(args.kind, when, live, test=True)
+        print("FORMAT    ", args.fmt or "auto")
+        run_once(args.kind, when, live, test=True, force_format=args.fmt)
         return
     one = args.one or os.environ.get("ONE", "").lower() in {"1", "true", "yes"}
     slots = remaining_slots(cfg, args.when or None, one=one)

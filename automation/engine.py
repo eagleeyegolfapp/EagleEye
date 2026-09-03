@@ -712,6 +712,25 @@ def host_media(url: str, slug: str, content_type: str = "image/jpeg") -> str:
     return hosted
 
 
+TEST_FORMATS = {
+    "auto": {},
+    "cover": {"style": "cover"},
+    "broadcast": {"style": "broadcast"},
+    "split": {"style": "split"},
+    "scorebug": {"style": "scorebug"},
+    "editorial": {"style": "editorial"},
+    "clean": {"style": "clean"},
+    "meme": {"style": "meme"},
+    "stack": {"style": "stack"},
+    "carousel": {"style": "carousel"},
+    "avatar": {"style": "avatar"},
+    "free_video": {"style": "free_video"},
+    "story": {"style": "split", "flourish": "story"},
+    "thread": {"flourish": "thread"},
+    "poll": {"flourish": "poll"},
+}
+
+
 def run_once(
     kind: str | None,
     when: str | None,
@@ -720,6 +739,7 @@ def run_once(
     angle: int = 0,
     test: bool = False,
     angles_total: int = 1,
+    force_format: str | None = None,
 ) -> dict:
     cfg = load_config()
     if notify_if_ended(cfg):
@@ -728,7 +748,8 @@ def run_once(
         raise SystemExit("Automation is paused. Open the dashboard and turn it back on.")
     now = datetime.now(TZ)
     if (
-        story_override is None
+        not test
+        and story_override is None
         and now.weekday() not in (cfg.get("days") or list(range(7)))
         and kind in {None, "auto"}
     ):
@@ -790,9 +811,12 @@ def run_once(
     weekly_patch: dict = {}
     if story_override is None:
         extra_reddit, weekly_patch = weekly_reddit_targets(cfg, state)
-    flourish = pick_flourish(cfg, state)
+    fmt = TEST_FORMATS.get((force_format or "").strip().lower() or "auto") or {}
+    flourish = fmt.get("flourish") or pick_flourish(cfg, state)
     _RUN_FLOURISH.append(flourish)
     print(f"FLOURISH   {flourish}  (one extra — not stacked)")
+    if fmt.get("style"):
+        print(f"FORMAT     forced {fmt['style']}")
 
     copy = write_copy(
         story,
@@ -835,11 +859,21 @@ def run_once(
             flourish=flourish,
             last_styles=list(state.get("ig_styles") or []),
             extra_stills=extra_bytes,
+            force_style=fmt.get("style"),
         )
         if ig_pack:
             print("VISUAL     IG", ig_pack["style"], "·", still_info.get("kind"))
         else:
             print("VISUAL     IG skipped (weak frame) — X/Reddit still go")
+    elif fmt.get("style") in {"avatar", "free_video"}:
+        ig_pack = build_ig_pack(
+            b"",
+            copy,
+            story,
+            flourish=flourish,
+            force_style=fmt.get("style"),
+        )
+        print("VISUAL     IG", (ig_pack or {}).get("style") or "skip", "· no still")
     else:
         print("VISUAL     no official frame — X/Reddit still unfurl")
     hosted_slides: list[str] = []

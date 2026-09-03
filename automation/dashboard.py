@@ -158,7 +158,24 @@ PAGE = r"""<!doctype html>
     border-radius:999px; padding:11px 18px; font-weight:600; cursor:pointer; letter-spacing:.04em; }
   button.ghost { background:transparent; color:var(--gold); border:1px solid var(--gold); }
   button.tiny { padding:6px 10px; font-size:12px; }
-  .actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; }
+  .actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; align-items:flex-end; }
+  .dd { position:relative; display:inline-block; }
+  .dd-menu {
+    display:none; position:absolute; left:0; bottom:calc(100% + 8px);
+    min-width:248px; background:#0C0D11; border:1px solid var(--gold);
+    border-radius:14px; padding:6px; z-index:50;
+    max-height:min(70vh, 520px); overflow:auto;
+    box-shadow:0 18px 50px rgba(0,0,0,.55);
+  }
+  .dd.open .dd-menu { display:block; }
+  .dd-menu button.item {
+    display:block; width:100%; text-align:left; background:transparent;
+    color:var(--ink); border:0; border-radius:8px; padding:9px 12px;
+    font-weight:500; letter-spacing:0; font-size:13px;
+  }
+  .dd-menu button.item:hover { background:rgba(201,162,39,.14); color:var(--gold2); }
+  .dd-lab { font-size:10px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--gold); padding:10px 12px 4px; }
   .ok { color:var(--ok); font-size:13px; min-height:1.3em; margin-top:12px; }
   .warn { color:var(--warn); font-size:13px; margin:8px 0 0; }
   .mixbar { display:flex; height:10px; border-radius:99px; overflow:hidden; border:1px solid var(--line); margin-top:8px; }
@@ -298,7 +315,29 @@ PAGE = r"""<!doctype html>
       <div class="actions">
         <button id="save">Save</button>
         <button class="ghost" id="run">Run next slot</button>
-        <button class="ghost" id="test_now">Test now</button>
+        <div class="dd" id="test_dd">
+          <button class="ghost" id="test_btn" type="button">Test ▾</button>
+          <div class="dd-menu" id="test_menu" role="menu">
+            <button type="button" class="item" data-fmt="auto">Auto — system picks</button>
+            <div class="dd-lab">Instagram stills</div>
+            <button type="button" class="item" data-fmt="cover">Cover — giant type</button>
+            <button type="button" class="item" data-fmt="broadcast">Broadcast — lower-third</button>
+            <button type="button" class="item" data-fmt="split">Split — photo + panel</button>
+            <button type="button" class="item" data-fmt="scorebug">Scorebug — ticker</button>
+            <button type="button" class="item" data-fmt="editorial">Editorial — gold spine</button>
+            <button type="button" class="item" data-fmt="clean">Clean — shot only</button>
+            <button type="button" class="item" data-fmt="meme">Meme — top / bottom</button>
+            <button type="button" class="item" data-fmt="stack">Stack + verdict</button>
+            <button type="button" class="item" data-fmt="carousel">Carousel — 3 slides</button>
+            <div class="dd-lab">Instagram video</div>
+            <button type="button" class="item" data-fmt="avatar">Avatar + voiceover</button>
+            <button type="button" class="item" data-fmt="free_video">Free-use golf clip</button>
+            <button type="button" class="item" data-fmt="story">Story — 9:16 question</button>
+            <div class="dd-lab">X extra</div>
+            <button type="button" class="item" data-fmt="thread">Thread</button>
+            <button type="button" class="item" data-fmt="poll">Poll</button>
+          </div>
+        </div>
         <button class="ghost" id="run_all">Fill remaining today</button>
       </div>
       <p class="ok" id="msg"></p>
@@ -348,7 +387,8 @@ function setBusy(on, title, kicker){
   ov.className = "ov" + (on ? " on" : "");
   document.getElementById("run").disabled = on;
   document.getElementById("run_all").disabled = on;
-  document.getElementById("test_now").disabled = on;
+  const tb = document.getElementById("test_btn");
+  if (tb) tb.disabled = on;
   document.getElementById("spot_go").disabled = on;
   if (title) document.getElementById("ov_title").textContent = title;
   if (kicker) document.getElementById("ov_kick").textContent = kicker;
@@ -652,10 +692,21 @@ async function kick(fill){
 }
 document.getElementById("run").onclick = () => kick(false);
 document.getElementById("run_all").onclick = () => kick(true);
-document.getElementById("test_now").onclick = async () => {
-  setBusy(true, "Test post", "Publish one now");
+const testDd = document.getElementById("test_dd");
+document.getElementById("test_btn").onclick = (e) => {
+  e.stopPropagation();
+  testDd.classList.toggle("open");
+};
+document.addEventListener("click", () => testDd.classList.remove("open"));
+async function testFormat(fmt, label){
+  testDd.classList.remove("open");
+  setBusy(true, "Test post", label || fmt);
   show("");
-  const r = await fetch("/api/test", { method:"POST", headers:{"Content-Type":"application/json"}, body: "{}" });
+  const r = await fetch("/api/test", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({format: fmt || "auto"}),
+  });
   const d = await r.json();
   if (!d.started && d.error) {
     setBusy(false);
@@ -663,6 +714,12 @@ document.getElementById("test_now").onclick = async () => {
     return;
   }
   watchBusy();
+}
+document.getElementById("test_menu").onclick = (e) => {
+  const b = e.target.closest("button.item");
+  if (!b) return;
+  e.stopPropagation();
+  testFormat(b.dataset.fmt, b.textContent.trim());
 };
 document.getElementById("spot_go").onclick = async () => {
   const url = document.getElementById("spot_url").value.trim();
@@ -754,7 +811,19 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, b'{"ok":true}', "application/json")
             return
         if path == "/api/test":
-            cmd = [_job_python(), "-u", str(HERE / "run_daily.py"), "--live", "--test", "--kind", "auto"]
+            extra = json.loads(raw.decode() or "{}")
+            fmt = str(extra.get("format") or "auto").strip().lower()
+            allowed = {
+                "auto", "cover", "broadcast", "split", "scorebug", "editorial",
+                "clean", "meme", "stack", "carousel", "avatar", "free_video",
+                "story", "thread", "poll",
+            }
+            if fmt not in allowed:
+                fmt = "auto"
+            cmd = [
+                _job_python(), "-u", str(HERE / "run_daily.py"),
+                "--live", "--test", "--kind", "auto", "--format", fmt,
+            ]
             started, err = _start_job(cmd, "test")
             self._send(
                 200 if started else 409,
