@@ -805,10 +805,11 @@ def run_once(
     official = story.get("video_url") or story.get("article_url") or ""
     if not official:
         raise SystemExit("No official clip or article URL — will not invent footage.")
+    print("  stills   scoring official frames")
     stills = official_stills(story, limit=4)
     still_info = stills[0] if stills else official_still(story)
     extra_bytes = [s["bytes"] for s in stills[1:3] if s.get("bytes")]
-    if still_info and (still_info.get("score") or 50) < 32:
+    if (not test) and still_info and (still_info.get("score") or 50) < 32:
         try:
             from media import edit_still
 

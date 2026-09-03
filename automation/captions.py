@@ -74,7 +74,7 @@ def _chat(prompt: str) -> str | None:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=45, context=CTX) as resp:
+        with urllib.request.urlopen(req, timeout=22, context=CTX) as resp:
             data = json.loads(resp.read().decode())
         return data["choices"][0]["message"]["content"]
     except Exception as e:  # noqa: BLE001
@@ -229,7 +229,9 @@ def write_copy(
         for t in recent:
             user += f"- {t.replace(chr(10), ' ')[:160]}\n"
 
+    print("  copy     writing take…")
     parsed = _parse_json(_chat(user) or "")
+    print("  copy     ", (parsed.get("mode") if parsed else "fallback"))
     base = fallback(story, ask=ask)
     if parsed:
         for k in (

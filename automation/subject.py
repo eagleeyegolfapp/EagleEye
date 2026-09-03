@@ -4,41 +4,11 @@ from __future__ import annotations
 
 from PIL import Image, ImageFilter
 
-try:
-    import cv2  # type: ignore
-    import numpy as np  # type: ignore
-
-    _CV = True
-except Exception:
-    cv2 = None  # type: ignore
-    np = None  # type: ignore
-    _CV = False
-
 
 def _faces_cv(im: Image.Image) -> list[tuple[int, int, int, int]]:
-    if not _CV or not hasattr(cv2, "CascadeClassifier"):
-        return []
-    try:
-        g = cv2.cvtColor(np.array(im.convert("RGB")), cv2.COLOR_RGB2GRAY)
-        h, w = g.shape
-        scale = 1.0
-        if max(w, h) > 900:
-            scale = 900 / max(w, h)
-            g = cv2.resize(g, (int(w * scale), int(h * scale)))
-        xml = getattr(cv2, "data", None)
-        path = (xml.haarcascades + "haarcascade_frontalface_default.xml") if xml else ""
-        if not path:
-            return []
-        cascade = cv2.CascadeClassifier(path)
-        if cascade.empty():
-            return []
-        raw = cascade.detectMultiScale(g, scaleFactor=1.12, minNeighbors=5, minSize=(28, 28))
-    except Exception:
-        return []
-    out = []
-    for x, y, fw, fh in raw:
-        out.append((int(x / scale), int(y / scale), int(fw / scale), int(fh / scale)))
-    return out
+    # OpenCV is optional and its dylibs hang when the venv lives on iCloud.
+    # Skin + edge peak is the always-on path.
+    return []
 
 
 def _skin_peak(im: Image.Image) -> tuple[float, float, float]:

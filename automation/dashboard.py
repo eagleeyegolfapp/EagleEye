@@ -63,7 +63,7 @@ def _run_job(cmd: list[str], kind: str) -> None:
                 continue
             with _LOCK:
                 ACTIVITY["lines"] = (ACTIVITY["lines"] + [text])[-80:]
-        code = proc.wait(timeout=900)
+        code = proc.wait(timeout=240)
         with _LOCK:
             ACTIVITY["ok"] = code == 0
             ACTIVITY["error"] = "" if code == 0 else "Run failed. See the log."
@@ -385,9 +385,14 @@ async function pollBusy(){
     const box = document.getElementById("ov_log");
     box.scrollTop = box.scrollHeight;
     paintSteps(log);
+    if (window._lastActLog === log) window._actStall = (window._actStall||0)+1;
+    else { window._actStall = 0; window._lastActLog = log; }
     if (a.active || a.ok === null) {
-      setBusy(true, a.kind === "spotlight" ? "Building a series" : (a.kind === "fill" ? "Filling today's slots" : "Creating a post"),
-        a.kind === "spotlight" ? "Spotlight" : "Live run");
+      if (window._actStall > 100) {
+        document.getElementById("ov_log").textContent = log + "\n\nStill working — if this line does not change, the last step is stuck.";
+      }
+      setBusy(true, a.kind === "spotlight" ? "Building a series" : (a.kind === "fill" ? "Filling today's slots" : (a.kind === "test" ? "Test post" : "Creating a post")),
+        a.kind === "spotlight" ? "Spotlight" : (a.kind === "test" ? "Test now" : "Live run"));
       return;
     }
     if (busyTimer) { clearInterval(busyTimer); busyTimer = null; }

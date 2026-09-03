@@ -160,7 +160,7 @@ def official_stills(story: dict, limit: int = 4) -> list[dict]:
 
     scored: list[tuple[float, dict]] = []
     seen_fp: set[int] = set()
-    for url in tried:
+    for url in tried[:5]:
         blob = fetch_image(url)
         if not blob:
             continue
@@ -175,6 +175,8 @@ def official_stills(story: dict, limit: int = 4) -> list[dict]:
             continue
         kind = _kind_for(url)
         scored.append((sc, {"url": url, "bytes": blob, "kind": kind, "score": sc}))
+        if sc >= 55:
+            break
     scored.sort(key=lambda x: x[0], reverse=True)
     if scored:
         print(f"  still   picked {scored[0][1]['kind']} score={scored[0][0]:.0f} from {len(scored)} frames")

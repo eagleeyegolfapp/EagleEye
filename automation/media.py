@@ -73,7 +73,7 @@ def download(url: str) -> bytes:
             "Accept": "image/jpeg,image/png,image/webp,image/*,*/*",
         },
     )
-    with urllib.request.urlopen(req, timeout=60, context=CTX) as resp:
+    with urllib.request.urlopen(req, timeout=12, context=CTX) as resp:
         return resp.read()
 
 
