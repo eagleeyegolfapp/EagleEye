@@ -830,18 +830,77 @@ def render_free_reel(story: dict, hook: str) -> bytes | None:
     return mp4.read_bytes()
 
 
-def render_avatar_reel(copy: dict, story: dict, hook: str, take: str) -> bytes | None:
-    """Avatar + voiceover Reel. Original character, original audio."""
+def _circle_head(src: Path, dest: Path, size: int = 340, ring: int = 8) -> None:
+    """Round talking-head badge with a gold ring, alpha outside the circle."""
+    im = Image.open(src).convert("RGB").resize((size, size), Image.Resampling.LANCZOS)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(canvas)
+    d.ellipse((0, 0, size - 1, size - 1), fill=GOLD + (255,))
+    inner = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(inner).ellipse((ring, ring, size - ring - 1, size - ring - 1), fill=255)
+    face = im.convert("RGBA")
+    face.putalpha(inner)
+    canvas.paste(face, (0, 0), face)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(dest)
+
+
+def _talking_pngs(work: Path) -> list[Path]:
+    assets = Path(__file__).resolve().parent / "assets"
+    frames = [
+        assets / "avatar.jpg",
+        assets / "avatar-f2.jpg",
+        assets / "avatar-f3.jpg",
+        assets / "avatar-f2.jpg",
+    ]
+    out = []
+    for i, src in enumerate(frames):
+        if not src.exists():
+            src = assets / "avatar.jpg"
+        if not src.exists():
+            continue
+        png = work / f"head-{i}.png"
+        _circle_head(src, png)
+        out.append(png)
+    return out
+
+
+def _story_bg(still_bytes: bytes | None, kicker: str, hook: str) -> Image.Image:
+    """9:16 screenshot the talking head sits on."""
+    if still_bytes:
+        try:
+            src = Image.open(io.BytesIO(still_bytes)).convert("RGB")
+            bg = smart_crop(src, STORY_W, STORY_H)
+        except Exception:
+            bg = Image.new("RGB", (STORY_W, STORY_H), DARK)
+    else:
+        bg = Image.new("RGB", (STORY_W, STORY_H), DARK)
+    img = _apply_bottom_dark(bg, 0.28, 200).convert("RGBA")
+    draw = ImageDraw.Draw(img)
+    kfont = _ff(_UI, 28)
+    _tracked(img, (STORY_W // 2, 64), kicker, kfont, GOLD, tracking=7, anchor="mt", shadow=2)
+    font, lines, size = _fit_lines(draw, hook, STORY_W - 120, 3, 48, 32)
+    y = 118
+    for ln in lines:
+        _shadow_text(img, (STORY_W // 2, y), ln, font, INK, anchor="mt", shadow=3)
+        y += int(size * 1.12)
+    return img.convert("RGB")
+
+
+def render_avatar_reel(
+    copy: dict,
+    story: dict,
+    hook: str,
+    take: str,
+    still_bytes: bytes | None = None,
+) -> bytes | None:
+    """TikTok-style: screenshot is the frame, small talking head + VO on top."""
     from media import tts
     from motion import ffmpeg_bin
 
     bin_ = ffmpeg_bin()
-    avatar = Path(__file__).resolve().parent / "assets" / "avatar.jpg"
     if not bin_:
         print("  ig      avatar: ffmpeg missing")
-        return None
-    if not avatar.exists():
-        print("  ig      avatar: no assets/avatar.jpg")
         return None
     vo = (hook + ". " + (take or "")).strip()
     vo = re.sub(r"\s+", " ", vo)[:220]
@@ -852,19 +911,39 @@ def render_avatar_reel(copy: dict, story: dict, hook: str, take: str) -> bytes |
         return None
     out_dir = Path(__file__).resolve().parent / "out" / "ig"
     out_dir.mkdir(parents=True, exist_ok=True)
+    work = out_dir / "avatar-work"
+    work.mkdir(parents=True, exist_ok=True)
+    pngs = _talking_pngs(work)
+    if not pngs:
+        print("  ig      avatar: no head frames")
+        return None
+    kicker = _kicker(story)
+    bg = _story_bg(still_bytes, kicker, hook)
+    bg_path = work / "bg.jpg"
+    bg.save(bg_path, quality=92)
     wav = out_dir / "avatar-vo.mp3"
-    mp4 = out_dir / f"{story.get('id') or 'ig'}-avatar.mp4"
     wav.write_bytes(audio)
-    # Square portrait → 9:16 cover. Do not crop 1080x1920 out of a 1:1 frame.
+    concat = work / "heads.txt"
+    # Flip mouth frames ~8 times/sec so it reads as talking, not a slideshow.
+    lines = []
+    for _ in range(40):
+        for p in pngs:
+            lines.append(f"file '{p}'\nduration 0.12\n")
+    lines.append(f"file '{pngs[-1]}'\n")
+    concat.write_text("".join(lines))
+    mp4 = out_dir / f"{story.get('id') or 'ig'}-avatar.mp4"
+    # Head sits bottom-left, above IG chrome. Screenshot fills the rest.
     cmd = [
         bin_, "-y",
-        "-loop", "1", "-i", str(avatar),
+        "-loop", "1", "-i", str(bg_path),
+        "-f", "concat", "-safe", "0", "-i", str(concat),
         "-i", str(wav),
         "-filter_complex",
-        "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
-        "crop=1080:1920,format=yuv420p,fps=30[v]",
-        "-map", "[v]", "-map", "1:a",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "[0:v]scale=1080:1920,fps=30,format=yuv420p,setsar=1[bg];"
+        "[1:v]fps=30,format=rgba,scale=340:340[head];"
+        "[bg][head]overlay=48:H-h-280:format=auto[v]",
+        "-map", "[v]", "-map", "2:a",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "128k",
         "-shortest", "-t", "15",
         "-movflags", "+faststart",
@@ -872,10 +951,10 @@ def render_avatar_reel(copy: dict, story: dict, hook: str, take: str) -> bytes |
     ]
     r = __import__("subprocess").run(cmd, capture_output=True, text=True)
     if r.returncode != 0 or not mp4.exists() or mp4.stat().st_size < 40000:
-        err = (r.stderr or "")[-280:].replace("\n", " ")
+        err = (r.stderr or "")[-320:].replace("\n", " ")
         print("  ig      avatar reel failed", err)
         return None
-    print("  ig      avatar reel", mp4.stat().st_size, "bytes")
+    print("  ig      avatar PIP reel", mp4.stat().st_size, "bytes")
     return mp4.read_bytes()
 
 
@@ -993,7 +1072,7 @@ def build_ig_pack(
         elif not video:
             print("  ig      free_video forced but failed — not swapping to a still")
     if style == "avatar":
-        video = render_avatar_reel(copy, story, hook, take)
+        video = render_avatar_reel(copy, story, hook, take, still_bytes=still_bytes)
         if not video and not forced:
             style = "split"
         elif not video:
