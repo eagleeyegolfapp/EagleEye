@@ -25,6 +25,10 @@ DARK = (7, 8, 10)
 
 # Grid on IG is the center square of 4:5 → y 135..1215. Type lives there.
 GRID_TOP, GRID_BOT = 135, 1215
+# iPhone IG chrome: account name + audio sit on the top of Reels/Stories.
+# ~20% down clears the header without parking type on the subject.
+FEED_SAFE_TOP = 270
+REEL_SAFE_TOP = 384
 
 STYLES = ("broadcast", "carousel", "clean", "editorial", "cover", "split", "scorebug")
 
@@ -299,6 +303,21 @@ def _gradient_mask(size: tuple[int, int], frac: float, power: float = 0.72, max_
     return col.resize((w, h), Image.Resampling.BILINEAR).filter(ImageFilter.GaussianBlur(8))
 
 
+def _apply_vband(photo: Image.Image, y0: int, h: int, max_a: int = 170) -> Image.Image:
+    """Darken a horizontal band so type reads. Does not black out the whole frame."""
+    w, ph = photo.size
+    mask = Image.new("L", (1, ph), 0)
+    pix = mask.load()
+    for y in range(max(0, y0), min(ph, y0 + h)):
+        t = (y - y0) / max(1, h)
+        # Peak in the middle of the band, fade at both edges.
+        a = int(max_a * (1 - abs(2 * t - 1) ** 1.05))
+        pix[0, y] = a
+    mask = mask.resize((w, ph), Image.Resampling.BILINEAR).filter(ImageFilter.GaussianBlur(10))
+    black = Image.new("RGB", photo.size, DARK)
+    return Image.composite(black, photo.convert("RGB"), mask)
+
+
 def _apply_bottom_dark(photo: Image.Image, frac: float = 0.42, max_a: int = 225) -> Image.Image:
     black = Image.new("RGB", photo.size, DARK)
     return Image.composite(black, photo, _gradient_mask(photo.size, frac, max_a=max_a))
@@ -500,10 +519,11 @@ def render_clean(photo: Image.Image, kicker: str) -> bytes:
     box_w = tw + 44
     flag = Image.new("RGBA", img.size, (0, 0, 0, 0))
     fd = ImageDraw.Draw(flag)
-    fd.rounded_rectangle([40, 48, 40 + box_w, 104], radius=4, fill=(7, 8, 10, 210))
-    fd.rectangle([40, 48, 48, 104], fill=GOLD + (255,))
+    y0 = FEED_SAFE_TOP
+    fd.rounded_rectangle([40, y0, 40 + box_w, y0 + 56], radius=4, fill=(7, 8, 10, 210))
+    fd.rectangle([40, y0, 48, y0 + 56], fill=GOLD + (255,))
     img.alpha_composite(flag)
-    _shadow_text(img, (62, 76), kicker, kfont, GOLD, anchor="lm", shadow=2)
+    _shadow_text(img, (62, y0 + 28), kicker, kfont, GOLD, anchor="lm", shadow=2)
     return _jpeg(img)
 
 
@@ -554,8 +574,8 @@ def render_cover(photo: Image.Image, kicker: str, mark: str, question: str) -> b
     draw = ImageDraw.Draw(img)
     _hairline(draw, FEED_W, FEED_H, 30)
     kfont = _ff(_UI, 30)
-    _tracked(img, (FEED_W // 2, 86), kicker, kfont, GOLD, tracking=8, anchor="mt", shadow=2)
-    draw.line([(FEED_W // 2 - 28, 126), (FEED_W // 2 + 28, 126)], fill=GOLD, width=2)
+    _tracked(img, (FEED_W // 2, FEED_SAFE_TOP), kicker, kfont, GOLD, tracking=8, anchor="mt", shadow=2)
+    draw.line([(FEED_W // 2 - 28, FEED_SAFE_TOP + 40), (FEED_W // 2 + 28, FEED_SAFE_TOP + 40)], fill=GOLD, width=2)
 
     max_w = FEED_W - 100
     size = 108
@@ -649,10 +669,11 @@ def render_scorebug(photo: Image.Image, kicker: str, hook: str) -> bytes:
     bug_w, bug_h = tw + 56, 56
     bug = Image.new("RGBA", img.size, (0, 0, 0, 0))
     bd = ImageDraw.Draw(bug)
-    bd.rounded_rectangle([40, 48, 40 + bug_w, 48 + bug_h], radius=6, fill=(7, 8, 10, 220))
-    bd.rectangle([40, 48, 50, 48 + bug_h], fill=GOLD + (255,))
+    y0 = FEED_SAFE_TOP
+    bd.rounded_rectangle([40, y0, 40 + bug_w, y0 + bug_h], radius=6, fill=(7, 8, 10, 220))
+    bd.rectangle([40, y0, 50, y0 + bug_h], fill=GOLD + (255,))
     img.alpha_composite(bug)
-    _shadow_text(img, (62, 48 + bug_h // 2), kicker, kfont, GOLD, anchor="lm", shadow=1)
+    _shadow_text(img, (62, y0 + bug_h // 2), kicker, kfont, GOLD, anchor="lm", shadow=1)
 
     bar_h = 118
     bar = Image.new("RGBA", img.size, (0, 0, 0, 0))
@@ -674,7 +695,7 @@ def render_moment(photo: Image.Image, kicker: str) -> bytes:
     draw = ImageDraw.Draw(img)
     _hairline(draw, FEED_W, FEED_H, 22)
     kfont = _ff(_UI, 26)
-    _tracked(img, (48, 52), kicker, kfont, GOLD, tracking=5, anchor="lt", shadow=2)
+    _tracked(img, (48, FEED_SAFE_TOP), kicker, kfont, GOLD, tracking=5, anchor="lt", shadow=2)
     mark = _ff(_UI, 22)
     _shadow_text(img, (FEED_W - 48, FEED_H - 44), "1 / 3", mark, MUTED, anchor="rt", shadow=2)
     return _jpeg(img)
@@ -693,10 +714,10 @@ def render_sidebar(photo: Image.Image, kicker: str, hook: str) -> bytes:
     img.alpha_composite(shade)
     draw = ImageDraw.Draw(img)
     kfont = _ff(_UI, 26)
-    _tracked(img, (48, 80), kicker, kfont, GOLD, tracking=6, anchor="lt", shadow=2)
-    draw.line([(48, 122), (120, 122)], fill=GOLD, width=2)
+    _tracked(img, (48, FEED_SAFE_TOP), kicker, kfont, GOLD, tracking=6, anchor="lt", shadow=2)
+    draw.line([(48, FEED_SAFE_TOP + 42), (120, FEED_SAFE_TOP + 42)], fill=GOLD, width=2)
     font, lines, size = _fit_lines(draw, hook, 480, 5, 50, 32)
-    y = 160
+    y = FEED_SAFE_TOP + 80
     for ln in lines:
         _shadow_text(img, (48, y), ln, font, INK, anchor="lt", shadow=3)
         y += int(size * 1.18)
@@ -712,15 +733,15 @@ def render_fight(kicker: str, question: str, hook: str) -> bytes:
     draw.rectangle([40, 40, FEED_W - 40, FEED_H - 40], outline=GOLD, width=2)
     draw.rectangle([52, 52, FEED_W - 52, FEED_H - 52], outline=(42, 39, 28), width=1)
     kfont = _ff(_UI, 30)
-    _tracked(img, (FEED_W // 2, 150), kicker, kfont, GOLD, tracking=8, anchor="mt", shadow=1)
-    draw.line([(FEED_W // 2 - 40, 194), (FEED_W // 2 + 40, 194)], fill=GOLD, width=2)
+    _tracked(img, (FEED_W // 2, FEED_SAFE_TOP), kicker, kfont, GOLD, tracking=8, anchor="mt", shadow=1)
+    draw.line([(FEED_W // 2 - 40, FEED_SAFE_TOP + 44), (FEED_W // 2 + 40, FEED_SAFE_TOP + 44)], fill=GOLD, width=2)
     label = _ff(_UI, 26)
-    _shadow_text(img, (FEED_W // 2, 250), "YOUR CALL", label, MUTED, anchor="mt", shadow=1)
+    _shadow_text(img, (FEED_W // 2, FEED_SAFE_TOP + 100), "YOUR CALL", label, MUTED, anchor="mt", shadow=1)
     text = question or hook
     font, lines, size = _fit_lines(draw, text, FEED_W - 160, 5, 68, 36)
     line_h = int(size * 1.18)
     block = line_h * len(lines) + 130
-    y = max(340, (FEED_H - block) // 2)
+    y = max(FEED_SAFE_TOP + 190, (FEED_H - block) // 2)
     for ln in lines:
         _shadow_text(img, (FEED_W // 2, y), ln, font, INK, anchor="mt", shadow=2)
         y += line_h
@@ -801,7 +822,7 @@ def render_meme(photo: Image.Image, kicker: str, hook: str, question: str, copy:
 
     tfont, tlines, tsize = fit(top, 72, 36, 2)
     bfont, blines, bsize = fit(bot, 64, 32, 2)
-    y = 48
+    y = FEED_SAFE_TOP
     for ln in tlines:
         _impact_text(img, (FEED_W // 2, y), ln, tfont)
         y += int(tsize * 1.08)
@@ -817,7 +838,7 @@ def render_stack(photos: list[Image.Image], kicker: str, hook: str, verdict: str
     canvas = Image.new("RGB", (FEED_W, FEED_H), DARK)
     n = max(1, min(3, len(photos)))
     slot_h = 310
-    top = 70
+    top = FEED_SAFE_TOP + 40
     for i, ph in enumerate(photos[:n]):
         thumb = ph.resize((780, slot_h), Image.Resampling.LANCZOS)
         x = 80 + i * 40
@@ -830,7 +851,7 @@ def render_stack(photos: list[Image.Image], kicker: str, hook: str, verdict: str
     img = canvas.convert("RGBA")
     draw = ImageDraw.Draw(img)
     kfont = _ff(_UI, 26)
-    _tracked(img, (FEED_W // 2, 28), kicker, kfont, GOLD, tracking=6, anchor="mt", shadow=1)
+    _tracked(img, (FEED_W // 2, FEED_SAFE_TOP - 8), kicker, kfont, GOLD, tracking=6, anchor="mt", shadow=1)
     panel_y = FEED_H - 280
     draw.rectangle([0, panel_y, FEED_W, FEED_H], fill=DARK + (255,))
     draw.rectangle([0, panel_y, FEED_W, panel_y + 4], fill=GOLD + (255,))
@@ -891,17 +912,23 @@ def _broll_overlay_png(hook: str, dest: Path) -> None:
     img = Image.new("RGBA", (STORY_W, STORY_H), (0, 0, 0, 0))
     shade = Image.new("RGBA", (STORY_W, STORY_H), (0, 0, 0, 0))
     pix = shade.load()
-    for y in range(0, 520):
-        a = int(170 * (1 - y / 520) ** 1.15)
+    band0 = REEL_SAFE_TOP - 70
+    band_h = 480
+    for y in range(max(0, band0), min(STORY_H, band0 + band_h)):
+        t = (y - band0) / band_h
+        a = int(175 * (1 - abs(2 * t - 1) ** 1.1))
         for x in range(STORY_W):
             pix[x, y] = (7, 8, 10, a)
     img.alpha_composite(shade)
     draw = ImageDraw.Draw(img)
     kfont = _ff(_UI, 28)
-    _tracked(img, (STORY_W // 2, 72), "GOLF", kfont, GOLD, tracking=10, anchor="mt", shadow=2)
-    draw.rectangle([STORY_W // 2 - 40, 108, STORY_W // 2 + 40, 111], fill=GOLD + (220,))
+    _tracked(img, (STORY_W // 2, REEL_SAFE_TOP), "GOLF", kfont, GOLD, tracking=10, anchor="mt", shadow=2)
+    draw.rectangle(
+        [STORY_W // 2 - 40, REEL_SAFE_TOP + 36, STORY_W // 2 + 40, REEL_SAFE_TOP + 39],
+        fill=GOLD + (220,),
+    )
     font, lines, size = _fit_lines(draw, hook or "THE COURSE DOESN'T CARE", STORY_W - 120, 3, 52, 34)
-    y = 130
+    y = REEL_SAFE_TOP + 58
     for ln in lines:
         _shadow_text(img, (STORY_W // 2, y), ln, font, INK, anchor="mt", shadow=3)
         y += int(size * 1.14)
@@ -1061,12 +1088,13 @@ def _story_bg(still_bytes: bytes | None, kicker: str, hook: str) -> Image.Image:
             bg = Image.new("RGB", (STORY_W, STORY_H), DARK)
     else:
         bg = Image.new("RGB", (STORY_W, STORY_H), DARK)
-    img = _apply_bottom_dark(bg, 0.28, 200).convert("RGBA")
+    img = _apply_bottom_dark(bg, 0.28, 200)
+    img = _apply_vband(img, REEL_SAFE_TOP - 80, 420, max_a=165).convert("RGBA")
     draw = ImageDraw.Draw(img)
     kfont = _ff(_UI, 28)
-    _tracked(img, (STORY_W // 2, 64), kicker, kfont, GOLD, tracking=7, anchor="mt", shadow=2)
+    _tracked(img, (STORY_W // 2, REEL_SAFE_TOP), kicker, kfont, GOLD, tracking=7, anchor="mt", shadow=2)
     font, lines, size = _fit_lines(draw, hook, STORY_W - 120, 3, 48, 32)
-    y = 118
+    y = REEL_SAFE_TOP + 54
     for ln in lines:
         _shadow_text(img, (STORY_W // 2, y), ln, font, INK, anchor="mt", shadow=3)
         y += int(size * 1.12)
