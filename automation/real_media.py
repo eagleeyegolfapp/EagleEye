@@ -23,7 +23,20 @@ def _yt_candidates(video_id: str) -> list[str]:
         f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg",
         f"https://i.ytimg.com/vi/{video_id}/sddefault.jpg",
         f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
+        f"https://i.ytimg.com/vi/{video_id}/1.jpg",
+        f"https://i.ytimg.com/vi/{video_id}/2.jpg",
+        f"https://i.ytimg.com/vi/{video_id}/3.jpg",
     ]
+
+
+def _x_orig(url: str) -> str:
+    if "pbs.twimg.com" not in url:
+        return url
+    u = url.replace("name=small", "name=orig").replace("name=360x360", "name=orig")
+    u = u.replace("name=900x900", "name=orig")
+    if "name=" not in u:
+        u += ("&" if "?" in u else "?") + "name=orig"
+    return u
 
 
 def _usable(blob: bytes) -> bool:
@@ -104,14 +117,25 @@ def x_video_thumb(status_id: str) -> str:
                 if "video.twimg.com" in thumb or thumb.endswith(".mp4"):
                     continue
                 if thumb.startswith("http") and ("pbs.twimg.com" in thumb or thumb.endswith((".jpg", ".jpeg", ".png", ".webp"))):
-                    return thumb
+                    return _x_orig(thumb)
     except Exception as e:  # noqa: BLE001
         print("  still   x thumb fail:", e)
     return ""
 
 
-def official_still(story: dict) -> dict | None:
-    """Return {url, bytes, kind} for the still that belongs to this clip/article."""
+def _kind_for(url: str) -> str:
+    if "ytimg.com" in url or "youtube" in url:
+        return "youtube-thumb"
+    if "twimg.com" in url:
+        return "x-video-thumb"
+    return "official-thumb"
+
+
+def official_stills(story: dict, limit: int = 4) -> list[dict]:
+    """All usable official stills, best first. Subject-scored."""
+    from ig_visual import strip_letterbox
+    from subject import score_still
+
     tried: list[str] = []
     xid = (story.get("x_status_id") or "") or x_status_id(story.get("video_url") or "") or x_status_id(
         story.get("article_url") or ""
@@ -134,20 +158,34 @@ def official_still(story: dict) -> dict | None:
         if u and u not in tried:
             tried.append(u)
 
-    blob = None
-    src = ""
+    scored: list[tuple[float, dict]] = []
+    seen_fp: set[int] = set()
     for url in tried:
         blob = fetch_image(url)
-        if blob:
-            src = url
-            if "ytimg.com" in url or "youtube" in url:
-                kind = "youtube-thumb"
-            elif "twimg.com" in url:
-                kind = "x-video-thumb"
-            else:
-                kind = "official-thumb"
-            print(f"  still   {kind} {url[:70]}")
-            return {"url": url, "bytes": blob, "kind": kind}
+        if not blob:
+            continue
+        fp = len(blob)
+        if fp in seen_fp:
+            continue
+        seen_fp.add(fp)
+        try:
+            im = strip_letterbox(Image.open(io.BytesIO(blob)).convert("RGB"))
+            sc = score_still(im)
+        except Exception:
+            continue
+        kind = _kind_for(url)
+        scored.append((sc, {"url": url, "bytes": blob, "kind": kind, "score": sc}))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    if scored:
+        print(f"  still   picked {scored[0][1]['kind']} score={scored[0][0]:.0f} from {len(scored)} frames")
+    return [s[1] for s in scored[:limit]]
+
+
+def official_still(story: dict) -> dict | None:
+    """Return {url, bytes, kind} for the still that belongs to this clip/article."""
+    found = official_stills(story, limit=1)
+    if found:
+        return found[0]
 
     page = story.get("article_url") or story.get("video_url") or ""
     if page.startswith("http") and "youtu" not in page and "vimeo.com" not in page:

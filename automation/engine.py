@@ -15,7 +15,7 @@ from late_client import create_post, persist_ids, resolve_accounts
 from mailer import send_report
 from media import download
 from ig_visual import build_ig_pack
-from real_media import official_still
+from real_media import official_still, official_stills
 from research import active_events, fetch_link_story, research_community, research_news
 from story_quality import story_keys, x_status_id
 from workflow_one import load_config
@@ -556,28 +556,38 @@ def instagram_payload(
     when: str,
     cfg: dict,
     media_urls: list[str],
+    media_type: str = "image",
 ) -> dict | None:
-    """IG feed or carousel. Real frame + original type."""
+    """IG feed, carousel, or Reel."""
     acc = os.environ.get("LATE_INSTAGRAM_ACCOUNT_ID", "")
     urls = [u for u in (media_urls or []) if u]
     if not acc or not urls:
         return None
-    kind = "carousel" if len(urls) > 1 else "feed"
-    print(f"  instagram {kind} {len(urls)} image(s)")
+    is_video = media_type == "video" or any(u.lower().endswith(".mp4") for u in urls)
+    if is_video:
+        kind = "reel"
+        items = [{"url": u, "type": "video"} for u in urls[:1]]
+    else:
+        kind = "carousel" if len(urls) > 1 else "feed"
+        items = [{"url": u, "type": "image"} for u in urls]
+    print(f"  instagram {kind} {len(items)} file(s)")
     cap = copy.get("instagram") or copy.get("twitter") or ""
     payload = _base_late(copy, when, cfg, " · IG")
     payload["content"] = cap
-    payload["mediaItems"] = [{"url": u, "type": "image"} for u in urls]
+    payload["mediaItems"] = items
+    psd: dict = {
+        "firstComment": copy.get("instagram_first_comment")
+        or copy.get("ig_first_comment")
+        or "",
+    }
+    if is_video:
+        psd["contentType"] = "reel"
     payload["platforms"] = [
         {
             "platform": "instagram",
             "accountId": acc,
             "customContent": cap,
-            "platformSpecificData": {
-                "firstComment": copy.get("instagram_first_comment")
-                or copy.get("ig_first_comment")
-                or "",
-            },
+            "platformSpecificData": psd,
         }
     ]
     return payload
@@ -708,6 +718,7 @@ def run_once(
     live: bool,
     story_override: dict | None = None,
     angle: int = 0,
+    test: bool = False,
     angles_total: int = 1,
 ) -> dict:
     cfg = load_config()
@@ -734,7 +745,7 @@ def run_once(
         story = None
     state = load_state()
     posted = state.get("posted_slots") or {}
-    if live and posted.get(when_s) in {"scheduled", "published", "submitted"}:
+    if live and not test and posted.get(when_s) in {"scheduled", "published", "submitted"}:
         if when_s in _booked_times():
             print("SKIP       already have a live post for", when_s)
             return {"status": "already-posted", "when": when_s}
@@ -794,7 +805,26 @@ def run_once(
     official = story.get("video_url") or story.get("article_url") or ""
     if not official:
         raise SystemExit("No official clip or article URL — will not invent footage.")
-    still_info = official_still(story)
+    stills = official_stills(story, limit=4)
+    still_info = stills[0] if stills else official_still(story)
+    extra_bytes = [s["bytes"] for s in stills[1:3] if s.get("bytes")]
+    if still_info and (still_info.get("score") or 50) < 32:
+        try:
+            from media import edit_still
+
+            edited = edit_still(
+                still_info["bytes"],
+                "Keep the same person and pose. Cinematic golf photo grade. "
+                "Remove on-screen captions, logos, and UI pills. Do not change identity.",
+                slug=str(story.get("id") or "edit"),
+            )
+            if edited and len(edited) > 8000:
+                still_info = dict(still_info)
+                still_info["bytes"] = edited
+                still_info["kind"] = (still_info.get("kind") or "still") + "+ai"
+                print("  still   AI-edited official frame")
+        except Exception as e:  # noqa: BLE001
+            print("  still   AI edit skipped:", e)
     ig_pack = None
     if still_info and still_info.get("bytes"):
         ig_pack = build_ig_pack(
@@ -803,6 +833,7 @@ def run_once(
             story,
             flourish=flourish,
             last_styles=list(state.get("ig_styles") or []),
+            extra_stills=extra_bytes,
         )
         if ig_pack:
             print("VISUAL     IG", ig_pack["style"], "·", still_info.get("kind"))
@@ -812,18 +843,23 @@ def run_once(
         print("VISUAL     no official frame — X/Reddit still unfurl")
     hosted_slides: list[str] = []
     hosted_story = ""
+    hosted_video = ""
     if live:
         found = resolve_accounts()
         persist_ids(found)
         if ig_pack:
             try:
-                for i, blob in enumerate(ig_pack["slides"]):
+                if ig_pack.get("video"):
+                    hosted_video = host_bytes(
+                        ig_pack["video"], f"{story['id']}-igreel", "video/mp4"
+                    )
+                for i, blob in enumerate(ig_pack.get("slides") or []):
                     hosted_slides.append(host_bytes(blob, f"{story['id']}-ig{i+1}"))
                 if ig_pack.get("story"):
                     hosted_story = host_bytes(ig_pack["story"], f"{story['id']}-igstory")
             except Exception as e:  # noqa: BLE001
                 print("  media   IG host failed:", e)
-                hosted_slides, hosted_story = [], ""
+                hosted_slides, hosted_story, hosted_video = [], "", ""
     still = (hosted_slides[0] if hosted_slides else "") or ((still_info or {}).get("url") or "")
     quote_id = str(story.get("x_status_id") or x_status_id(official) or "")
     yid_like = "youtube" in official or "youtu.be" in official or "vimeo.com" in official
@@ -866,9 +902,16 @@ def run_once(
             f"eagleeye-x-{story['id']}-{stamp}",
             fallback_url=official if quote_id else "",
         )
+        ig_media = [hosted_video] if hosted_video else hosted_slides
         ig_id = submit_late(
             "instagram",
-            instagram_payload(copy, when_s, cfg, hosted_slides),
+            instagram_payload(
+                copy,
+                when_s,
+                cfg,
+                ig_media,
+                media_type="video" if hosted_video else "image",
+            ),
             f"eagleeye-ig-{story['id']}-{stamp}",
         )
         if hosted_story:
@@ -917,7 +960,7 @@ def run_once(
     _RUN_LANES.append(lane)
     keys = story_keys(story)
     yids = [k for k in keys if not k.startswith("fp:") and not k.startswith("youtube:") and "://" not in k]
-    if live and result.get("status") in {"scheduled", "published", "submitted"}:
+    if live and not test and result.get("status") in {"scheduled", "published", "submitted"}:
         posted[when_s] = result["status"]
         state["posted_slots"] = dict(list(posted.items())[-80:])
         prev_keys = list(state.get("used_keys") or [])

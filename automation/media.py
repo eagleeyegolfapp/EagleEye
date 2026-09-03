@@ -135,6 +135,80 @@ def generate_short(prompt: str, image_url: str | None = None, seconds: int = 6) 
     return None
 
 
+def edit_still(blob: bytes, prompt: str, slug: str = "edit") -> bytes | None:
+    """AI-edit an official still (grade, recrop energy, kill burned captions). Keep the person."""
+    key = (os.environ.get("XAI_API_KEY") or "").strip()
+    if not key or not blob:
+        return None
+    import base64
+
+    b64 = base64.b64encode(blob).decode()
+    body = {
+        "model": os.environ.get("XAI_IMAGE_MODEL", "grok-imagine-image"),
+        "prompt": prompt,
+        "image": {"url": "data:image/jpeg;base64," + b64, "type": "image_url"},
+        "aspect_ratio": "3:4",
+        "n": 1,
+        "response_format": "b64_json",
+    }
+    try:
+        data = _http_json(f"{XAI}/images/edits", body, key)
+    except Exception as e:  # noqa: BLE001
+        print(f"  imagine edit failed: {e}")
+        return None
+    item = (data.get("data") or [None])[0] or {}
+    raw = item.get("b64_json") or item.get("b64")
+    if raw:
+        try:
+            return base64.b64decode(raw)
+        except Exception:
+            return None
+    url = item.get("url") or item.get("public_url")
+    if url and str(url).startswith("http"):
+        try:
+            return download(url)
+        except Exception:
+            return None
+    return None
+
+
+def tts(text: str, voice: str = "rex") -> bytes | None:
+    """xAI TTS. Returns mp3/wav bytes."""
+    key = (os.environ.get("XAI_API_KEY") or "").strip()
+    if not key or not (text or "").strip():
+        return None
+    body = {
+        "text": text.strip()[:420],
+        "voice_id": voice,
+        "language": "en",
+    }
+    req = urllib.request.Request(
+        f"{XAI}/tts",
+        data=json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "Accept": "*/*"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60, context=CTX) as resp:
+            blob = resp.read()
+            ctype = (resp.headers.get("Content-Type") or "").lower()
+    except Exception as e:  # noqa: BLE001
+        print(f"  tts     failed: {e}")
+        return None
+    if ctype.startswith("application/json"):
+        try:
+            data = json.loads(blob.decode())
+            url = data.get("url") or (data.get("audio") or {}).get("url")
+            if url:
+                return download(url)
+        except Exception:
+            return None
+        return None
+    if blob and len(blob) > 2000:
+        return blob
+    return None
+
+
 def still_for(story: dict, cfg: dict) -> str:
     """Return a public https JPEG URL. Never empty."""
     fallback = cfg.get("fallback_still") or FALLBACK

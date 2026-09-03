@@ -16,34 +16,42 @@ XAI = "https://api.x.ai/v1"
 
 SYSTEM = """You write captions for a golf account people actually follow.
 
-Goal: replies, quote-tweets, profile taps. You are not a recap bot.
+Goal: replies, quote-tweets, profile taps, saves. You are in the group chat, not a recap bot.
 
-Voice: a good 8-handicap in the group chat. Dry, a little mean, has a take.
-NOT a brand intern. NOT "New from X:". NOT a rewritten YouTube title.
+This account has RANGE. Do not write every post in the same voice or the same shape.
+Pick ONE mode from the user prompt and commit to it:
+
+Modes:
+- hot_take: a verdict. You already decided. No question.
+- joke: PG-13 golf humor. Specific, not "golf is hard lol". No cussing (no f-words, s-words, a-holes). Hell, damn, crap, sucks, mid, cooked, criminal are fine.
+- question: ONE specific fight golfers will answer. Never "thoughts?" or "agree?".
+- story: 2-3 short lines that set a scene then punch.
+- list: 3 tight beats. Numbers or dashes.
+- one_liner: one sentence. Stop.
+- roast: credit the creator by name in the sentence and needle them. Affectionate mean.
+- praise: rare. When it's actually sick, say so plainly.
 
 Rules:
-- Do NOT restate the video/article title. React to it. Assume they can see the official clip or photo.
-- First line is the hook. It has to work next to the REAL official thumbnail/player — we never invent footage.
-- Never write "link in comments", "check the comments", "full video below", or "link in bio".
-- Do not put URLs in twitter, twitter_thread, instagram, or poll text. The system appends the official URL on X and Reddit so the real clip unfurls.
-- Community: pick a side, roast, or agree. Credit the creator by name in the sentence, not as a byline.
-- News: a take, not the lede.
-- About a third of posts end with a specific question golfers will argue about. Never "thoughts?" or "agree?".
-- The other two thirds: land the take and stop. No question.
-- Emojis: 0-2, only if they land (👀 😭 🔥 💀). No hashtag soup.
+- Be explicit. If the take is "the captains played it safe," write that. Do not get cute and vague.
+- Do NOT restate the video/article title. React to it.
+- Do NOT start with "X really posted this" or "That's the news" or "That's the clip." Those are banned openers.
+- Do NOT copy a recent take the user lists. Change the angle and the wording.
+- Emojis: 0-5, only if they land (👀 😭 🔥 💀 😅 🫡 🧢 📉 📈). No hashtag soup. No emoji at the start of every line.
+- Never write "link in comments", "full video below", or "link in bio".
+- Do not put URLs in twitter, twitter_thread, instagram, or poll text. The system appends the official URL.
 - Never mention EagleEye, App Store, unlock, subscription, ads, or download.
 - Never pretend we filmed it or collab'd.
-- X single tweet (twitter): under 200 characters. No URL.
-- X thread (twitter_thread): array of exactly 3 tweets. 1 = hook. 2 = the take. 3 = a specific question golfers will fight about. Each under 200 characters. No URLs.
-- X poll: poll_question is the question (under 180 chars, no URL). poll_options is 3 or 4 answers, EACH 25 characters max, punchy, no emoji.
-- Instagram caption: 2-4 short lines. The photo already has overlay_hook burned on it, so the caption is the rest of the take plus the fight question. Do not repeat overlay_hook word for word.
-- overlay_hook: 4-8 words that sit ON the Instagram photo. A magazine cover line. Not a full sentence. No source/creator name. No URL. No emoji. Punch. Examples: "Scottie is not like us" / "That's a captain's pick" / "The room just got quiet"
-- overlay_question: under 60 characters. The fight golfers will reply to. Empty string if this post has no question.
-- Reddit title: debate hook, under 80 characters, no emoji dump.
-- Reddit body: 1-2 sentences. Do not paste the URL; the system appends it.
-- ig_first_comment: ONLY Watch/Read links if we pass them. No recap.
+- X tweet (twitter): under 200 characters. No URL. Must make sense if you only read that one line.
+- X thread: exactly 3 tweets, each under 200, no URLs. Different jobs: hook / why / button. Do not repeat the hook three times.
+- X poll: poll_question under 180. poll_options 3 or 4 answers, EACH 25 chars max, punchy, no emoji.
+- Instagram caption: 2-5 short lines. The photo already has overlay_hook on it, so caption is the rest of the take. Line breaks. Can be funnier than X. Do not repeat overlay_hook word for word.
+- overlay_hook: 4-8 words ON the photo. Magazine cover line. No source name. No URL. No emoji.
+- overlay_question: under 60 chars. Empty if this post has no question.
+- Reddit title: debate hook, under 80 chars.
+- Reddit body: 1-2 sentences. No URL.
+- ig_first_comment: ONLY Watch/Read links.
 
-Return JSON only with keys: twitter, twitter_thread, poll_question, poll_options, instagram, overlay_hook, overlay_question, reddit_title, reddit_body, ig_first_comment."""
+Return JSON only with keys: twitter, twitter_thread, poll_question, poll_options, instagram, overlay_hook, overlay_question, reddit_title, reddit_body, ig_first_comment, mode."""
 
 
 def _chat(prompt: str) -> str | None:
@@ -53,7 +61,7 @@ def _chat(prompt: str) -> str | None:
     model = os.environ.get("XAI_TEXT_MODEL", "grok-4")
     body = {
         "model": model,
-        "temperature": 0.95,
+        "temperature": 1.05,
         "messages": [
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": prompt},
@@ -86,41 +94,52 @@ def _parse_json(text: str) -> dict | None:
         return None
 
 
+_FALLBACK_TAKES = [
+    ("The safe play aged in dog years.", "hot_take"),
+    ("This is the clip you send the group chat at 9:41 pm.", "joke"),
+    ("I believed it for exactly one swing.", "one_liner"),
+    ("Pretty. Also, completely unhelpful if you actually have to hit the shot.", "roast"),
+    ("If this is the standard now, most of us are playing a different sport.", "hot_take"),
+    ("Not mad. Just taking notes for the next time someone says 'it's easy'.", "joke"),
+    ("The room got quiet for a reason.", "story"),
+]
+
+
 def fallback(story: dict, ask: bool = False) -> dict:
     video = story.get("video_url") or story.get("article_url") or ""
     headline = (story.get("headline") or "golf being golf").rstrip(".")
     creator = story.get("creator") or story.get("video_channel") or ""
+    take, mode = random.choice(_FALLBACK_TAKES)
+    who = creator.split()[0] if creator else "They"
     if story.get("lane") == "community":
-        twitter = f"{creator} really posted this" if creator else headline
-        if not ask:
-            twitter = f"{twitter} 😭"
-        else:
-            twitter = f"{twitter}. You buying it?"
-        ig = f"{headline}\n\n{creator + ' cooked.' if creator else 'Yeah.'}"
-        reddit_title = (f"{creator}: {headline}" if creator else headline)[:80]
-        reddit_body = headline
+        twitter = f"{who} cooked and I'm not sure it was on purpose. {take}"
+        if ask:
+            twitter = f"{take} {who} posted it. You buying the lesson or the thumbnail?"
+        ig = f"{take}\n\n{who} put this on the internet like we wouldn't notice."
+        reddit_title = (f"{who} really went there" if creator else take)[:80]
+        reddit_body = take
     else:
-        twitter = f"{headline} 👀"
-        ig = f"{headline}\n\nThat's the news."
-        reddit_title = headline[:80]
+        twitter = take if not ask else f"{take} Right call or just the loud one?"
+        ig = f"{take}\n\nThat's the whole story. The rest is noise."
+        reddit_title = take[:80]
         reddit_body = headline
     comment = f"Watch 👉 {video}" if video else ""
     if story.get("lane") == "community":
         thread = [
             twitter[:180],
-            ("That's the clip. " + headline)[:180],
-            "You buying it or scrolling?"[:180],
+            take[:180],
+            ("Would you actually try this, or just screenshot it?" if ask else "I'm taking the under.")[:180],
         ]
         poll_q = "You buying this one?"
-        poll_opts = ["Yes", "No", "Already tried", "Hard pass"]
+        poll_opts = ["Buy it", "Hard pass", "Already tried", "Need a mulligan"]
     else:
         thread = [
             twitter[:180],
-            "That's the news. That's the tweet.",
-            "Right call or safe pick?",
+            take[:180],
+            ("Right call or just the safe one?" if ask else "Write it down. This ages fast.")[:180],
         ]
         poll_q = "Right call?"
-        poll_opts = ["Yes", "No", "Too soon", "Who cares"]
+        poll_opts = ["Right call", "Safe pick", "Too soon", "Who cares"]
     hook_src = re.sub(r"https?://\S+", "", twitter)
     hook_src = re.sub(r"\s+", " ", hook_src).strip()
     overlay_hook = " ".join(hook_src.split()[:7]).rstrip(".!,") or headline[:48]
@@ -137,6 +156,7 @@ def fallback(story: dict, ask: bool = False) -> dict:
         "reddit_body": reddit_body,
         "ig_first_comment": comment,
         "title": reddit_title,
+        "mode": mode,
     }
 
 
@@ -180,9 +200,13 @@ def write_copy(
 ) -> dict:
     video = story.get("video_url") or ""
     article = story.get("article_url") or ""
-    ask = random.random() < 0.34
+    modes = ["hot_take", "joke", "question", "story", "list", "one_liner", "roast", "praise"]
+    # Don't let question dominate; keep it in the mix.
+    mode = random.choices(modes, weights=[18, 16, 16, 12, 10, 12, 12, 4], k=1)[0]
+    ask = mode == "question" or (mode in {"roast", "joke"} and random.random() < 0.25)
     user = (
         f"Lane: {story.get('lane')}\n"
+        f"MODE for this post (commit to it): {mode}\n"
         f"Headline (do not restate): {story.get('headline')}\n"
         f"Creator: {story.get('creator') or story.get('video_channel') or ''}\n"
         f"Official video: {video}\n"
@@ -190,10 +214,10 @@ def write_copy(
         f"Is official short: {story.get('is_short')}\n"
         f"Excerpt: {(story.get('excerpt') or '')[:280]}\n"
     )
-    if ask:
-        user += "This post MUST end with one specific question golfers will argue about.\n"
+    if ask or mode == "question":
+        user += "End with one specific question golfers will argue about. Not 'thoughts?'.\n"
     else:
-        user += "No question this time. Land the take and stop.\n"
+        user += "No question. Land the take and stop. A verdict, a joke, or a one-liner.\n"
     if angles_total > 1:
         user += (
             f"This is post {angle + 1} of {angles_total} about the SAME clip. "
@@ -217,6 +241,7 @@ def write_copy(
             "poll_question",
             "overlay_hook",
             "overlay_question",
+            "mode",
         ):
             if parsed.get(k):
                 base[k] = str(parsed[k]).strip()

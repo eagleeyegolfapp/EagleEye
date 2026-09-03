@@ -260,36 +260,19 @@ def _auto_bias(im: Image.Image) -> str:
     return "center"
 
 
-def smart_crop(im: Image.Image, tw: int, th: int, bias: str = "auto") -> Image.Image:
-    """Fill target ratio by cropping. Auto-bias keeps the subject, dumps title cards."""
+def smart_crop(im: Image.Image, tw: int, th: int, bias: str = "auto", analysis: dict | None = None) -> Image.Image:
+    """Fill target ratio by cropping ON the subject, not the frame center."""
+    from subject import analyze, crop_around
+
     im = strip_letterbox(im.convert("RGB"))
-    if _caption_chip_in_top(im) and im.height >= im.width:
-        bias = "south"
-    elif bias == "auto":
-        bias = _auto_bias(im)
-    src_r = im.width / max(1, im.height)
-    dst_r = tw / th
-    if src_r > dst_r:
-        nw = int(im.height * dst_r)
-        extra = im.width - nw
-        if bias == "east":
-            left = int(extra * 0.72)
-        elif bias == "west":
-            left = int(extra * 0.18)
-        else:
-            left = extra // 2
-        im = im.crop((left, 0, left + nw, im.height))
-    elif src_r < dst_r:
-        nh = int(im.width / dst_r)
-        extra = im.height - nh
-        if bias == "north":
-            top = int(extra * 0.10)
-        elif bias == "south":
-            top = int(extra * 0.94)
-        else:
-            top = int(extra * 0.32)
-        im = im.crop((0, top, im.width, top + nh))
-    return _grade(im.resize((tw, th), Image.Resampling.LANCZOS))
+    a = analysis or analyze(im)
+    dest_cy = 0.40
+    if a.get("talking_head"):
+        dest_cy = 0.38
+    elif a.get("caption_chip") or _caption_chip_in_top(im):
+        dest_cy = 0.55
+    cropped = crop_around(im, tw, th, a.get("cx", 0.5), a.get("cy", 0.45), dest_cy=dest_cy)
+    return _grade(cropped)
 
 
 def _bias_for(story_id: str) -> str:
@@ -746,35 +729,210 @@ def render_story(photo: Image.Image, kicker: str, question: str, hook: str) -> b
     return _jpeg(img)
 
 
-def pick_style(story_id: str, last_styles: list[str], has_question: bool, flourish: str) -> str:
+def render_meme(photo: Image.Image, kicker: str, hook: str, question: str) -> bytes:
+    """Top/bottom bars. Reads as a golf-twitter meme, not a title card."""
+    img = photo.convert("RGBA")
+    bar = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    bd = ImageDraw.Draw(bar)
+    bd.rectangle([0, 0, FEED_W, 210], fill=(7, 8, 10, 210))
+    bd.rectangle([0, FEED_H - 240, FEED_W, FEED_H], fill=(7, 8, 10, 225))
+    img.alpha_composite(bar)
+    draw = ImageDraw.Draw(img)
+    kfont = _ff(_UI, 26)
+    _tracked(img, (FEED_W // 2, 36), kicker, kfont, GOLD, tracking=7, anchor="mt", shadow=1)
+    font, lines, size = _fit_lines(draw, hook.upper(), FEED_W - 80, 2, 52, 34)
+    y = 78
+    for ln in lines:
+        _shadow_text(img, (FEED_W // 2, y), ln, font, INK, anchor="mt", shadow=3)
+        y += int(size * 1.1)
+    text = question or hook
+    qfont, qlines, qsize = _fit_lines(draw, text, FEED_W - 90, 3, 44, 30)
+    y = FEED_H - 220
+    for ln in qlines:
+        _shadow_text(img, (FEED_W // 2, y), ln, qfont, GOLD, anchor="mt", shadow=2)
+        y += int(qsize * 1.14)
+    return _jpeg(img)
+
+
+def render_stack(photos: list[Image.Image], kicker: str, hook: str, verdict: str) -> bytes:
+    """2–3 frames + a verdict. Grid thumb is the stack, not a naked still."""
+    canvas = Image.new("RGB", (FEED_W, FEED_H), DARK)
+    n = max(1, min(3, len(photos)))
+    slot_h = 310
+    top = 70
+    for i, ph in enumerate(photos[:n]):
+        thumb = ph.resize((780, slot_h), Image.Resampling.LANCZOS)
+        x = 80 + i * 40
+        y = top + i * 250
+        shadow = Image.new("RGB", (thumb.width + 16, thumb.height + 16), (0, 0, 0))
+        canvas.paste(shadow, (x + 10, y + 12))
+        canvas.paste(thumb, (x, y))
+        d = ImageDraw.Draw(canvas)
+        d.rectangle([x, y, x + thumb.width, y + 6], fill=GOLD)
+    img = canvas.convert("RGBA")
+    draw = ImageDraw.Draw(img)
+    kfont = _ff(_UI, 26)
+    _tracked(img, (FEED_W // 2, 28), kicker, kfont, GOLD, tracking=6, anchor="mt", shadow=1)
+    panel_y = FEED_H - 280
+    draw.rectangle([0, panel_y, FEED_W, FEED_H], fill=DARK + (255,))
+    draw.rectangle([0, panel_y, FEED_W, panel_y + 4], fill=GOLD + (255,))
+    font, lines, size = _fit_lines(draw, hook, FEED_W - 100, 2, 44, 30)
+    y = panel_y + 28
+    for ln in lines:
+        _shadow_text(img, (FEED_W // 2, y), ln, font, INK, anchor="mt", shadow=2)
+        y += int(size * 1.12)
+    if verdict:
+        vfont = _ff(_UI_REG, 30)
+        for ln in _wrap(draw, verdict, vfont, FEED_W - 120, 2):
+            _shadow_text(img, (FEED_W // 2, y + 8), ln, vfont, GOLD, anchor="mt", shadow=2)
+            y += 36
+    return _jpeg(img)
+
+
+def render_free_reel(story: dict, hook: str) -> bytes | None:
+    """CC golf clip, trimmed 9:16. Never a Tour broadcast file."""
+    from free_media import download_free, pick_free_clip
+    from motion import ffmpeg_bin
+
+    bin_ = ffmpeg_bin()
+    if not bin_:
+        return None
+    out_dir = Path(__file__).resolve().parent / "out" / "ig"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    src = out_dir / "free-src.bin"
+    mp4 = out_dir / f"{story.get('id') or 'ig'}-free.mp4"
+    local = list((Path(__file__).resolve().parent / "broll").glob("*.mp4")) + list(
+        (Path(__file__).resolve().parent / "broll").glob("*.mov")
+    )
+    if local:
+        src.write_bytes(random.choice(local).read_bytes())
+        print("  ig      local b-roll")
+    else:
+        clip = pick_free_clip()
+        if not clip:
+            return None
+        blob = download_free(clip["url"])
+        if not blob:
+            return None
+        src.write_bytes(blob)
+        print("  ig      free-use", clip.get("license") or "CC", clip["url"][:60])
+    cmd = [
+        bin_, "-y", "-i", str(src), "-t", "9",
+        "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,format=yuv420p",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+        "-an", "-movflags", "+faststart",
+        str(mp4),
+    ]
+    r = __import__("subprocess").run(cmd, capture_output=True, text=True)
+    if r.returncode != 0 or not mp4.exists() or mp4.stat().st_size < 40000:
+        print("  ig      free reel failed", (r.stderr or "")[-160:].replace("\n", " "))
+        return None
+    return mp4.read_bytes()
+
+
+def render_avatar_reel(copy: dict, story: dict, hook: str, take: str) -> bytes | None:
+    """Avatar + voiceover Reel. Original character, original audio."""
+    from media import tts
+    from motion import ffmpeg_bin
+
+    bin_ = ffmpeg_bin()
+    avatar = Path(__file__).resolve().parent / "assets" / "avatar.jpg"
+    if not bin_ or not avatar.exists():
+        return None
+    vo = (hook + ". " + (take or "")).strip()
+    vo = re.sub(r"\s+", " ", vo)[:220]
+    audio = tts(vo, voice="rex")
+    if not audio:
+        return None
+    out_dir = Path(__file__).resolve().parent / "out" / "ig"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    wav = out_dir / "avatar-vo.mp3"
+    mp4 = out_dir / f"{story.get('id') or 'ig'}-avatar.mp4"
+    wav.write_bytes(audio)
+    # 9:16 Ken Burns on the buddy + the voice.
+    cmd = [
+        bin_, "-y",
+        "-loop", "1", "-i", str(avatar),
+        "-i", str(wav),
+        "-filter_complex",
+        "[0:v]scale=1296:1296:force_original_aspect_ratio=increase,crop=1080:1920,"
+        "zoompan=z='min(1.12,1+0.0005*on)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)-80':"
+        "d=240:s=1080x1920:fps=30,format=yuv420p[v]",
+        "-map", "[v]", "-map", "1:a",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-c:a", "aac", "-b:a", "128k", "-shortest", "-t", "12",
+        "-movflags", "+faststart",
+        str(mp4),
+    ]
+    r = __import__("subprocess").run(cmd, capture_output=True, text=True)
+    if r.returncode != 0 or not mp4.exists() or mp4.stat().st_size < 40000:
+        print("  ig      avatar reel failed", (r.stderr or "")[-180:].replace("\n", " "))
+        return None
+    return mp4.read_bytes()
+
+
+def pick_style(
+    story_id: str,
+    last_styles: list[str],
+    has_question: bool,
+    flourish: str,
+    analysis: dict | None = None,
+    extra_n: int = 1,
+) -> str:
     rng = random.Random(int(hashlib.sha1((story_id or "x").encode()).hexdigest()[:12], 16))
+    a = analysis or {}
     weights = {
-        "carousel": 28 if has_question else 11,
-        "cover": 18,
-        "broadcast": 16,
-        "split": 14,
-        "editorial": 12,
+        "carousel": 22 if has_question else 8,
+        "cover": 14,
+        "broadcast": 14,
+        "split": 12,
+        "editorial": 10,
         "scorebug": 10,
-        "clean": 14,
+        "clean": 12,
+        "meme": 14,
+        "stack": 10 if extra_n >= 2 else 4,
+        "avatar": 8,
+        "free_video": 7,
     }
+    if a.get("talking_head"):
+        weights["cover"] = 2
+        weights["clean"] = 3
+        weights["split"] += 14
+        weights["scorebug"] += 10
+        weights["avatar"] += 8
+        weights["meme"] += 4
+    if a.get("title_card"):
+        weights["cover"] = 1
+        weights["clean"] = 1
+        weights["broadcast"] = 2
+        weights["meme"] += 16
+        weights["carousel"] += 8
+        weights["avatar"] += 10
+    if a.get("action") and a.get("grid_ok"):
+        weights["clean"] += 10
+        weights["cover"] += 8
+        weights["scorebug"] += 4
+    if not a.get("grid_ok") and not a.get("talking_head"):
+        weights["split"] += 8
+        weights["scorebug"] += 6
+        weights["cover"] = max(2, weights["cover"] - 8)
     recent = last_styles or []
     last = recent[-1] if recent else None
     for s in recent[-3:]:
         if s in weights:
-            weights[s] = max(4, weights[s] - 14)
+            weights[s] = max(3, weights[s] - 14)
     if last == "clean":
-        weights["cover"] += 10
-        weights["carousel"] += 8
-        weights["broadcast"] += 6
+        weights["cover"] += 8
+        weights["meme"] += 8
     if last == "cover":
         weights["clean"] += 10
-        weights["editorial"] += 6
+        weights["meme"] += 6
         weights["cover"] = max(3, weights["cover"] - 8)
-    if last == "carousel":
+    if last == "meme":
         weights["clean"] += 8
-        weights["scorebug"] += 6
+        weights["broadcast"] += 6
     names = list(weights)
-    w = [weights[n] for n in names]
+    w = [max(1, weights[n]) for n in names]
     return rng.choices(names, weights=w, k=1)[0]
 
 
@@ -784,24 +942,47 @@ def build_ig_pack(
     story: dict,
     flourish: str = "none",
     last_styles: list[str] | None = None,
+    extra_stills: list[bytes] | None = None,
 ) -> dict | None:
-    if is_weak_still(still_bytes):
-        print("  ig      weak still — skipping Instagram")
-        return None
+    from subject import analyze
+
+    extras = [b for b in (extra_stills or []) if b]
+    weak = is_weak_still(still_bytes)
     try:
-        src = Image.open(io.BytesIO(still_bytes)).convert("RGB")
+        src = Image.open(io.BytesIO(still_bytes)).convert("RGB") if still_bytes else None
     except Exception:
-        return None
+        src = None
     take, question = split_take(copy, story)
     kicker = _kicker(story)
     hook = overlay_hook(copy, take, question, kicker)
     q = overlay_question(copy, question)
     sid = str(story.get("id") or "ig")
-    bias = _bias_for(sid)
-    photo = smart_crop(src, FEED_W, FEED_H, bias=bias)
-    style = pick_style(sid, last_styles or [], bool(q), flourish)
+    analysis = analyze(src) if src is not None else {}
+    if weak or analysis.get("title_card"):
+        # Do not skip IG. Swap the object.
+        style_hint = "meme"
+    else:
+        style_hint = None
+    photo = smart_crop(src, FEED_W, FEED_H, analysis=analysis) if src is not None else Image.new("RGB", (FEED_W, FEED_H), DARK)
+    style = style_hint or pick_style(sid, last_styles or [], bool(q), flourish, analysis, extra_n=1 + len(extras))
     mark = cover_mark(hook)
+    extra_photos = []
+    for blob in extras[:3]:
+        try:
+            extra_photos.append(smart_crop(Image.open(io.BytesIO(blob)).convert("RGB"), FEED_W, FEED_H))
+        except Exception:
+            continue
 
+    video = None
+    slides: list[bytes] = []
+    if style == "free_video":
+        video = render_free_reel(story, hook)
+        if not video:
+            style = "meme"
+    if style == "avatar":
+        video = render_avatar_reel(copy, story, hook, take)
+        if not video:
+            style = "split"
     if style == "clean":
         slides = [render_clean(photo, kicker)]
     elif style == "editorial":
@@ -812,18 +993,31 @@ def build_ig_pack(
         slides = [render_split(photo, kicker, hook, q)]
     elif style == "scorebug":
         slides = [render_scorebug(photo, kicker, hook)]
+    elif style == "meme":
+        slides = [render_meme(photo, kicker, hook, q or take)]
+    elif style == "stack":
+        stack_photos = [photo] + extra_photos
+        if len(stack_photos) < 2:
+            # Same frame, two subject-aware crops still reads as a stack.
+            stack_photos.append(photo)
+        slides = [render_stack(stack_photos, kicker, hook, q or take)]
+        if extra_photos:
+            slides.append(render_broadcast(extra_photos[0], kicker, hook, q, show_q=False))
+        slides.append(render_fight(kicker, q, hook))
     elif style == "carousel":
         slides = [
             render_moment(photo, kicker),
             render_sidebar(photo, kicker, hook),
             render_fight(kicker, q, hook),
         ]
+    elif style in {"avatar", "free_video"} and video:
+        slides = []
     else:
         slides = [render_broadcast(photo, kicker, hook, q, show_q=bool(q))]
         style = "broadcast"
 
     story_bytes = None
-    if flourish == "story":
+    if flourish == "story" and src is not None:
         story_bytes = render_story(src, kicker, q, hook)
 
     out_dir = Path(__file__).resolve().parent / "out" / "ig"
@@ -832,11 +1026,14 @@ def build_ig_pack(
         (out_dir / f"{sid}-{style}-{i+1}.jpg").write_bytes(blob)
     if story_bytes:
         (out_dir / f"{sid}-story.jpg").write_bytes(story_bytes)
-    print(f"  ig      {style} · {len(slides)} slide(s)" + (" + story" if story_bytes else ""))
+    if video:
+        (out_dir / f"{sid}-avatar.mp4").write_bytes(video)
+    print(f"  ig      {style} · {len(slides)} slide(s)" + (" + story" if story_bytes else "") + (" + reel" if video else ""))
     return {
         "style": style,
         "slides": slides,
         "story": story_bytes,
+        "video": video,
         "take_on_image": style != "clean",
         "kicker": kicker,
         "hook": hook,

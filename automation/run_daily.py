@@ -34,6 +34,7 @@ def main() -> None:
         default=os.environ.get("LIVE", "").lower() in {"1", "true", "yes"},
     )
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--test", action="store_true", help="One post, publish now, do not consume a clock slot")
     args = ap.parse_args()
     live = args.live and not args.dry_run
     print("EagleEye daily runner")
@@ -56,6 +57,14 @@ def main() -> None:
     if args.spotlight:
         print("  spotlight", args.spotlight, "x", args.count, "every", args.every_hours, "h")
         run_spotlight(args.spotlight, args.count, args.every_hours, live)
+        return
+    if args.test or os.environ.get("TEST_NOW", "").lower() in {"1", "true", "yes"}:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        when = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M")
+        print("TEST NOW  one post, publish immediately, does not take a daily slot")
+        run_once(args.kind, when, live, test=True)
         return
     one = args.one or os.environ.get("ONE", "").lower() in {"1", "true", "yes"}
     slots = remaining_slots(cfg, args.when or None, one=one)

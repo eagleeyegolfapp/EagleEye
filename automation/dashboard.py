@@ -298,6 +298,7 @@ PAGE = r"""<!doctype html>
       <div class="actions">
         <button id="save">Save</button>
         <button class="ghost" id="run">Run next slot</button>
+        <button class="ghost" id="test_now">Test now</button>
         <button class="ghost" id="run_all">Fill remaining today</button>
       </div>
       <p class="ok" id="msg"></p>
@@ -320,8 +321,8 @@ PAGE = r"""<!doctype html>
         <h2>How a post is built</h2>
         <div class="pipe">
           <div class="step"><div class="num">1</div><div><b>X + Reddit keep the clip</b><small>Official video URL on X. Link post on Reddit. Never ripped.</small></div></div>
-          <div class="step"><div class="num">2</div><div><b>Instagram is a magazine</b><small>Seven layouts rotate so the grid never repeats: cover, broadcast, split, scorebug, editorial, clean, argument carousel. Short hook on the real frame — never a naked thumb.</small></div></div>
-          <div class="step"><div class="num">3</div><div><b>Skip junk thumbs</b><small>No end cards, no letterbox, no play-button garbage. Weak frames go to X/Reddit only.</small></div></div>
+          <div class="step"><div class="num">2</div><div><b>Instagram is a magazine + mix</b><small>Subject-first crop. Cover, meme, stack, split, avatar+VO, free-use golf clip. Type follows the person, not the jpeg center.</small></div></div>
+          <div class="step"><div class="num">3</div><div><b>Junk thumbs get a new object</b><small>Title cards and bad crops become a meme, stack, or reel — not a naked YouTube poster.</small></div></div>
         </div>
       </section>
       <section class="card">
@@ -347,6 +348,7 @@ function setBusy(on, title, kicker){
   ov.className = "ov" + (on ? " on" : "");
   document.getElementById("run").disabled = on;
   document.getElementById("run_all").disabled = on;
+  document.getElementById("test_now").disabled = on;
   document.getElementById("spot_go").disabled = on;
   if (title) document.getElementById("ov_title").textContent = title;
   if (kicker) document.getElementById("ov_kick").textContent = kicker;
@@ -645,6 +647,18 @@ async function kick(fill){
 }
 document.getElementById("run").onclick = () => kick(false);
 document.getElementById("run_all").onclick = () => kick(true);
+document.getElementById("test_now").onclick = async () => {
+  setBusy(true, "Test post", "Publish one now");
+  show("");
+  const r = await fetch("/api/test", { method:"POST", headers:{"Content-Type":"application/json"}, body: "{}" });
+  const d = await r.json();
+  if (!d.started && d.error) {
+    setBusy(false);
+    show(d.error);
+    return;
+  }
+  watchBusy();
+};
 document.getElementById("spot_go").onclick = async () => {
   const url = document.getElementById("spot_url").value.trim();
   const count = +document.getElementById("spot_count").value || 3;
@@ -733,6 +747,15 @@ class Handler(BaseHTTPRequestHandler):
                 cfg["community_channels"] = merged
             cfg_path.write_text(json.dumps(cfg, indent=2) + "\n")
             self._send(200, b'{"ok":true}', "application/json")
+            return
+        if path == "/api/test":
+            cmd = [_job_python(), "-u", str(HERE / "run_daily.py"), "--live", "--test", "--kind", "auto"]
+            started, err = _start_job(cmd, "test")
+            self._send(
+                200 if started else 409,
+                json.dumps({"started": started, "error": err}).encode(),
+                "application/json",
+            )
             return
         if path == "/api/run":
             extra = json.loads(raw.decode() or "{}")
