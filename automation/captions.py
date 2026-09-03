@@ -14,42 +14,41 @@ from workflow_one import twitter_len
 CTX = ssl.create_default_context()
 XAI = "https://api.x.ai/v1"
 
-SYSTEM = """You write captions for a golf account people actually follow.
+SYSTEM = """You write captions for a golf account. A person who does not follow golf must still understand every word.
 
-Goal: replies, quote-tweets, profile taps, saves. You are in the group chat, not a recap bot.
+Goal: they know WHAT happened, WHO it is, and WHY it's funny — in that order. Then they reply.
 
-This account has RANGE. Do not write every post in the same voice or the same shape.
-Pick ONE mode from the user prompt and commit to it:
+Clarity first. Humor second. Never mystery.
 
-Modes:
-- hot_take: a verdict. You already decided. No question.
-- joke: PG-13 golf humor. Specific, not "golf is hard lol". No cussing (no f-words, s-words, a-holes). Hell, damn, crap, sucks, mid, cooked, criminal are fine.
-- question: ONE specific fight golfers will answer. Never "thoughts?" or "agree?".
-- story: 2-3 short lines that set a scene then punch.
-- list: 3 tight beats. Numbers or dashes.
+Pick ONE mode and commit:
+- hot_take: a verdict. You already decided.
+- joke: PG-13 golf humor. Specific. No cussing (no f-words, s-words, a-holes). Hell, damn, crap, sucks, mid, cooked are fine.
+- question: ONE concrete question with two real sides. Never "thoughts?" or "agree?".
+- story: 2-3 short lines. Fact, then punch.
 - one_liner: one sentence. Stop.
-- roast: credit the creator by name in the sentence and needle them. Affectionate mean.
-- praise: rare. When it's actually sick, say so plainly.
 
-Rules:
-- Be explicit. If the take is "the captains played it safe," write that. Do not get cute and vague.
-- Do NOT restate the video/article title. React to it.
-- Do NOT start with "X really posted this" or "That's the news" or "That's the clip." Those are banned openers.
-- Do NOT copy a recent take the user lists. Change the angle and the wording.
-- Emojis: 0-5, only if they land (👀 😭 🔥 💀 😅 🫡 🧢 📉 📈). No hashtag soup. No emoji at the start of every line.
-- Never write "link in comments", "full video below", or "link in bio".
-- Do not put URLs in twitter, twitter_thread, instagram, or poll text. The system appends the official URL.
-- Never mention EagleEye, App Store, unlock, subscription, ads, or download.
-- Never pretend we filmed it or collab'd.
-- X tweet (twitter): under 200 characters. No URL. Must make sense if you only read that one line.
-- X thread: exactly 3 tweets, each under 200, no URLs. Different jobs: hook / why / button. Do not repeat the hook three times.
-- X poll: poll_question under 180. poll_options 3 or 4 answers, EACH 25 chars max, punchy, no emoji.
-- Instagram caption: 2-5 short lines. The photo already has overlay_hook on it, so caption is the rest of the take. Line breaks. Can be funnier than X. Do not repeat overlay_hook word for word.
-- overlay_hook: 4-8 words ON the photo. Magazine cover line. No source name. No URL. No emoji.
-- overlay_question: under 60 chars. Empty if this post has no question.
-- Reddit title: debate hook, under 80 chars.
-- Reddit body: 1-2 sentences. No URL.
-- ig_first_comment: ONLY Watch/Read links.
+Every caption MUST:
+1. Name the person or event in plain English on the first line. Not "he". Not "the captains". "Scottie Scheffler" / "the Presidents Cup (USA vs the rest of the world)".
+2. Say what actually happened in words a casual fan gets. If you use a golf term (handicap, bunker, pin, FedEx Cup), add a 3-6 word gloss or skip the term.
+3. Then the joke or take. Emojis are the norm: 1-3 per post (👀 😭 🔥 😅 🫡 ⛳ 💀 🧢). Not on every line. No hashtag soup.
+
+Banned:
+- Cute-vague lines ("the room got quiet", "aged in dog years", "that's the clip") with no fact attached.
+- Restating the video title word for word.
+- "X really posted this" / "That's the news".
+- Pretending we filmed it. EagleEye / App Store / download / subscription.
+- URLs (the system adds the official link).
+- "link in bio" / "full video below".
+
+X tweet (twitter): under 200 characters. No URL. First clause is who+what. Must make sense alone.
+X thread: exactly 3 tweets, each under 200, no URLs. Tweet 1 = who+what. Tweet 2 = the joke. Tweet 3 = the button.
+X poll: poll_question under 180, names the topic. poll_options 3 or 4 answers, EACH 25 chars max. Punchy. Emoji ok on question, not on options.
+Instagram caption: 2-5 short lines. Line 1 = who+what in plain English. Then the joke. Emojis welcome. Do not repeat overlay_hook word for word.
+overlay_hook: 4-8 PLAIN words on the image. Like a TV lower-third. "SCOTTIE RAN THE TABLE" not poetry. No URL. No emoji.
+overlay_question: under 60 chars. Empty if no question.
+Reddit title: who+what, under 80 chars. A stranger could read it.
+Reddit body: 1-2 sentences, same clarity. No URL.
+ig_first_comment: ONLY Watch/Read links.
 
 Return JSON only with keys: twitter, twitter_thread, poll_question, poll_options, instagram, overlay_hook, overlay_question, reddit_title, reddit_body, ig_first_comment, mode."""
 
@@ -95,34 +94,27 @@ def _parse_json(text: str) -> dict | None:
 
 
 _FALLBACK_TAKES = [
-    ("The safe play aged in dog years.", "hot_take"),
-    ("This is the clip you send the group chat at 9:41 pm.", "joke"),
-    ("I believed it for exactly one swing.", "one_liner"),
-    ("Pretty. Also, completely unhelpful if you actually have to hit the shot.", "roast"),
-    ("If this is the standard now, most of us are playing a different sport.", "hot_take"),
-    ("Not mad. Just taking notes for the next time someone says 'it's easy'.", "joke"),
-    ("The room got quiet for a reason.", "story"),
+    ("{who} just posted this and I am not okay 😭", "joke"),
+    ("{who} made this look easy. It is not easy 😅", "joke"),
+    ("{who} did the thing most of us only do in the group chat 🔥", "hot_take"),
+    ("Okay {who}… that one was actually sick 🫡", "one_liner"),
 ]
 
 
 def fallback(story: dict, ask: bool = False) -> dict:
     video = story.get("video_url") or story.get("article_url") or ""
-    headline = (story.get("headline") or "golf being golf").rstrip(".")
+    headline = (story.get("headline") or "something happened in golf").rstrip(".")
     creator = story.get("creator") or story.get("video_channel") or ""
+    who = creator.split()[0] if creator else "Golf"
     take, mode = random.choice(_FALLBACK_TAKES)
-    who = creator.split()[0] if creator else "They"
-    if story.get("lane") == "community":
-        twitter = f"{who} cooked and I'm not sure it was on purpose. {take}"
-        if ask:
-            twitter = f"{take} {who} posted it. You buying the lesson or the thumbnail?"
-        ig = f"{take}\n\n{who} put this on the internet like we wouldn't notice."
-        reddit_title = (f"{who} really went there" if creator else take)[:80]
-        reddit_body = take
-    else:
-        twitter = take if not ask else f"{take} Right call or just the loud one?"
-        ig = f"{take}\n\nThat's the whole story. The rest is noise."
-        reddit_title = take[:80]
-        reddit_body = headline
+    take = take.format(who=who)
+    fact = headline[:110]
+    twitter = f"{fact} {take}"
+    if ask:
+        twitter = f"{fact} You buying this, or is it just a good thumbnail?"
+    ig = f"{fact}\n\n{take}"
+    reddit_title = fact[:80]
+    reddit_body = f"{fact} {take}"
     comment = f"Watch 👉 {video}" if video else ""
     if story.get("lane") == "community":
         thread = [
@@ -200,19 +192,19 @@ def write_copy(
 ) -> dict:
     video = story.get("video_url") or ""
     article = story.get("article_url") or ""
-    modes = ["hot_take", "joke", "question", "story", "list", "one_liner", "roast", "praise"]
-    # Don't let question dominate; keep it in the mix.
-    mode = random.choices(modes, weights=[18, 16, 16, 12, 10, 12, 12, 4], k=1)[0]
-    ask = mode == "question" or (mode in {"roast", "joke"} and random.random() < 0.25)
+    modes = ["hot_take", "joke", "question", "story", "one_liner"]
+    mode = random.choices(modes, weights=[20, 28, 16, 18, 18], k=1)[0]
+    ask = mode == "question" or (mode == "joke" and random.random() < 0.2)
     user = (
         f"Lane: {story.get('lane')}\n"
         f"MODE for this post (commit to it): {mode}\n"
-        f"Headline (do not restate): {story.get('headline')}\n"
-        f"Creator: {story.get('creator') or story.get('video_channel') or ''}\n"
+        f"What happened (name names, explain it): {story.get('headline')}\n"
+        f"Who posted it: {story.get('creator') or story.get('video_channel') or ''}\n"
         f"Official video: {video}\n"
         f"Article: {article}\n"
         f"Is official short: {story.get('is_short')}\n"
         f"Excerpt: {(story.get('excerpt') or '')[:280]}\n"
+        "Write for someone who does not follow golf. First line = who + what. Then the joke. Use 1-3 emojis.\n"
     )
     if ask or mode == "question":
         user += "End with one specific question golfers will argue about. Not 'thoughts?'.\n"
@@ -387,7 +379,7 @@ Rules:
 - Do NOT mention a player, a tour, a tournament, a news story, or a specific famous course by name.
 - Do NOT pretend we filmed this. Do not say "we shot this" or "our course".
 - Do NOT start with "X really posted this" or "That's the news" or "That's the clip."
-- Emojis: 0-3, only if they land (⛳ 👀 😭 🔥 😅 🫡). No hashtag soup.
+- Emojis are the norm: 1-3 (⛳ 👀 😭 🔥 😅 🫡 💀). Not a wall of them. No hashtag soup.
 - Never write "link in comments", "full video below", or "link in bio".
 - Do not put URLs anywhere. There is no article to watch.
 - Never mention EagleEye, App Store, unlock, subscription, ads, or download.
@@ -406,7 +398,7 @@ Return JSON only with keys: twitter, twitter_thread, poll_question, poll_options
 
 _BROLL_FALLBACKS = [
     (
-        "Golf is the only sport where you pay to be embarrassed in front of people you like.",
+        "Golf is the only sport where you pay to be embarrassed in front of people you like 😭",
         "Eighteen holes. No clock. Nowhere to hide.",
         "THE COURSE DOESN'T CARE",
         "hot_take",

@@ -789,6 +789,45 @@ def render_stack(photos: list[Image.Image], kicker: str, hook: str, verdict: str
     return _jpeg(img)
 
 
+def render_still_reel(still_bytes: bytes, kicker: str, hook: str) -> bytes | None:
+    """B-roll treatment on a news still: 9:16, gold kicker, slow push-in, autoplay."""
+    from motion import ffmpeg_bin
+
+    bin_ = ffmpeg_bin()
+    if not bin_ or not still_bytes:
+        return None
+    out_dir = Path(__file__).resolve().parent / "out" / "ig"
+    work = out_dir / "broll-work"
+    work.mkdir(parents=True, exist_ok=True)
+    bg = _story_bg(still_bytes, kicker, hook)
+    jpg = work / "still-reel.jpg"
+    bg.save(jpg, quality=92)
+    mp4 = out_dir / "still-reel.mp4"
+    cmd = [
+        bin_, "-y",
+        "-loop", "1", "-i", str(jpg),
+        "-f", "lavfi", "-t", "9", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+        "-filter_complex",
+        "[0:v]scale=1296:2304,zoompan=z='min(1.12,1+0.0007*on)':"
+        "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=240:s=1080x1920:fps=30,"
+        "format=yuv420p,setsar=1[v]",
+        "-map", "[v]", "-map", "1:a",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", "30",
+        "-c:a", "aac", "-ac", "2", "-ar", "44100", "-b:a", "96k",
+        "-shortest", "-t", "8",
+        "-movflags", "+faststart",
+        str(mp4),
+    ]
+    r = __import__("subprocess").run(cmd, capture_output=True, text=True, timeout=40)
+    if r.returncode != 0 or not mp4.exists() or mp4.stat().st_size < 80_000:
+        err = (r.stderr or "")[-200:].replace("\n", " ")
+        print("  ig      still reel failed", err)
+        return None
+    print("  ig      still → 9:16 reel", mp4.stat().st_size, "bytes")
+    return mp4.read_bytes()
+
+
 def _broll_overlay_png(hook: str, dest: Path) -> None:
     """Gold kicker + magazine hook over cinematic golf B-roll. Transparent PNG."""
     img = Image.new("RGBA", (STORY_W, STORY_H), (0, 0, 0, 0))
@@ -1054,6 +1093,7 @@ def pick_style(
     flourish: str,
     analysis: dict | None = None,
     extra_n: int = 1,
+    theme: str | None = None,
 ) -> str:
     rng = random.Random(int(hashlib.sha1((story_id or "x").encode()).hexdigest()[:12], 16))
     a = analysis or {}
@@ -1068,6 +1108,7 @@ def pick_style(
         "meme": 14,
         "stack": 10 if extra_n >= 2 else 4,
         "avatar": 8,
+        "theme_reel": 0,
     }
     if a.get("talking_head"):
         weights["cover"] = 2
@@ -1106,7 +1147,12 @@ def pick_style(
     if last == "meme":
         weights["clean"] += 8
         weights["broadcast"] += 6
-    names = list(weights)
+    if theme:
+        weights["theme_reel"] = 18
+    if last == "theme_reel":
+        weights["theme_reel"] = 2
+        weights["broadcast"] += 8
+    names = [n for n, wt in weights.items() if wt > 0]
     w = [max(1, weights[n]) for n in names]
     return rng.choices(names, weights=w, k=1)[0]
 
@@ -1136,13 +1182,22 @@ def build_ig_pack(
     analysis = analyze(src) if src is not None else {}
     photo = smart_crop(src, FEED_W, FEED_H, analysis=analysis) if src is not None else Image.new("RGB", (FEED_W, FEED_H), DARK)
     forced = (force_style or "").strip().lower() or None
+    from free_media import story_theme as _story_theme
+
+    theme = None if story.get("broll") else _story_theme(story)
     if forced:
         style = forced
         print(f"  ig      forced {style}")
+    elif (weak or analysis.get("title_card")) and theme:
+        style = "theme_reel"
+        print(f"  ig      weak still → themed b-roll ({theme})")
     elif weak or analysis.get("title_card"):
         style = "meme"
     else:
-        style = pick_style(sid, last_styles or [], bool(q), flourish, analysis, extra_n=1 + len(extras))
+        style = pick_style(
+            sid, last_styles or [], bool(q), flourish, analysis,
+            extra_n=1 + len(extras), theme=theme,
+        )
     mark = cover_mark(hook)
     extra_photos = []
     for blob in extras[:3]:
@@ -1159,6 +1214,19 @@ def build_ig_pack(
             style = "meme"
         elif not video:
             print("  ig      free_video forced but failed — not swapping to a still")
+    if style == "theme_reel":
+        from free_media import pick_free_clip
+
+        clip = pick_free_clip(theme=theme)
+        st = dict(story)
+        if clip:
+            st["clip"] = clip
+            print("  ig      theme", theme or "course", "clip", clip.get("id"))
+        video = render_free_reel(st, hook)
+        if not video and not forced:
+            style = "broadcast"
+        elif not video:
+            print("  ig      theme_reel failed — not swapping if forced")
     if style == "avatar":
         video = render_avatar_reel(copy, story, hook, take, still_bytes=still_bytes)
         if not video and not forced:
@@ -1192,13 +1260,26 @@ def build_ig_pack(
             render_sidebar(photo, kicker, hook),
             render_fight(kicker, q, hook),
         ]
-    elif style in {"avatar", "free_video"}:
+    elif style in {"avatar", "free_video", "theme_reel"}:
         slides = []
         if not video:
             print("  ig      no reel file — Instagram still skipped for this format")
     else:
         slides = [render_broadcast(photo, kicker, hook, q, show_q=bool(q))]
         style = "broadcast"
+
+    still_to_reel = {"cover", "broadcast", "split", "editorial", "scorebug", "clean"}
+    if (
+        not forced
+        and not video
+        and style in still_to_reel
+        and still_bytes
+        and not story.get("broll")
+    ):
+        video = render_still_reel(still_bytes, kicker, hook)
+        if video:
+            slides = []
+            print("  ig      autoplay reel (B-roll overlay on this still)")
 
     story_bytes = None
     if flourish == "story" and src is not None:

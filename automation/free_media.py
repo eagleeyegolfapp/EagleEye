@@ -29,6 +29,7 @@ CATALOG = [
         "license": "Pexels",
         "credit": "Pexels",
         "weight": 3,
+        "themes": ("mountain", "course", "fairway"),
     },
     {
         "id": "17239356",
@@ -37,6 +38,7 @@ CATALOG = [
         "license": "Pexels",
         "credit": "Pexels",
         "weight": 3,
+        "themes": ("course", "water", "bunker", "fairway"),
     },
     {
         "id": "15508702",
@@ -45,6 +47,7 @@ CATALOG = [
         "license": "Pexels",
         "credit": "HUAHIN PILOT LAND / Pexels",
         "weight": 3,
+        "themes": ("coastal", "water", "bunker", "course"),
     },
     {
         "id": "854337",
@@ -53,6 +56,7 @@ CATALOG = [
         "license": "Pexels",
         "credit": "Pixabay / Pexels",
         "weight": 3,
+        "themes": ("green", "bunker", "desert", "course"),
     },
     {
         "id": "18138326",
@@ -61,6 +65,7 @@ CATALOG = [
         "license": "Pexels",
         "credit": "Jaxon Matthew Willis / Pexels",
         "weight": 2,
+        "themes": ("fairway", "water", "course"),
     },
     {
         "id": "18138335",
@@ -69,6 +74,7 @@ CATALOG = [
         "license": "Pexels",
         "credit": "Jaxon Matthew Willis / Pexels",
         "weight": 2,
+        "themes": ("fairway", "course", "water"),
     },
     {
         "id": "18138329",
@@ -77,6 +83,7 @@ CATALOG = [
         "license": "Pexels",
         "credit": "Jaxon Matthew Willis / Pexels",
         "weight": 2,
+        "themes": ("course", "bunker", "water", "fairway"),
     },
     {
         "id": "18138331",
@@ -85,6 +92,7 @@ CATALOG = [
         "license": "Pexels",
         "credit": "Jaxon Matthew Willis / Pexels",
         "weight": 1,
+        "themes": ("water", "course", "fairway"),
     },
     {
         "id": "18451070",
@@ -93,6 +101,7 @@ CATALOG = [
         "license": "Pexels",
         "credit": "Pexels",
         "weight": 2,
+        "themes": ("green", "bunker", "water"),
     },
     {
         "id": "18451072",
@@ -101,6 +110,7 @@ CATALOG = [
         "license": "Pexels",
         "credit": "Pexels",
         "weight": 2,
+        "themes": ("green", "water", "bunker"),
     },
 ]
 
@@ -129,9 +139,37 @@ def clip_urls(clip: dict) -> list[str]:
     return hd + uhd
 
 
-def pick_free_clip(used: set[str] | None = None) -> dict | None:
+def story_theme(story: dict | None) -> str | None:
+    """Match a news story to a course theme. None = this is about a person, not a place."""
+    if not story:
+        return None
+    blob = " ".join(
+        str(story.get(k) or "")
+        for k in ("headline", "excerpt", "title", "creator", "video_channel")
+    ).lower()
+    rules = (
+        (("coast", "ocean", "seaside", "island", "beach", "links by the"), "coastal"),
+        (("putt", "putting", "tap-in", "tap in", "on the green", "short game"), "green"),
+        (("bunker", "sand trap", "sand shot", "from the sand"), "bunker"),
+        (("mountain", "highlands", "scotland", "ireland", "links"), "mountain"),
+        (("water hazard", "pond", "lake", "carry the water"), "water"),
+        (("fairway", "tee box", "first tee", "course setup", "pin position", "1pm", "frost delay"), "course"),
+    )
+    for keys, theme in rules:
+        if any(k in blob for k in keys):
+            return theme
+    return None
+
+
+def pick_free_clip(used: set[str] | None = None, theme: str | None = None) -> dict | None:
     used = used or set()
     bag = [c for c in CATALOG if c["url"] not in used and c["id"] not in used]
+    if theme:
+        themed = [c for c in bag if theme in (c.get("themes") or ())]
+        if themed:
+            bag = themed
+        else:
+            bag = [c for c in CATALOG if theme in (c.get("themes") or ())] or bag
     if not bag:
         bag = list(CATALOG)
     weights = [max(1, int(c.get("weight") or 1)) for c in bag]
