@@ -63,7 +63,7 @@ def _run_job(cmd: list[str], kind: str) -> None:
                 continue
             with _LOCK:
                 ACTIVITY["lines"] = (ACTIVITY["lines"] + [text])[-80:]
-        code = proc.wait(timeout=240)
+        code = proc.wait(timeout=420)
         with _LOCK:
             ACTIVITY["ok"] = code == 0
             ACTIVITY["error"] = "" if code == 0 else "Run failed. See the log."

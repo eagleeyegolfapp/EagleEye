@@ -113,14 +113,20 @@ def local_broll() -> list[Path]:
 
 
 def clip_urls(clip: dict) -> list[str]:
+    """HD first (reliable encode), 4K after. Output is 1080x1920 either way."""
     urls = [clip["url"]] + list(clip.get("fallbacks") or [])
     seen: set[str] = set()
-    out: list[str] = []
+    hd: list[str] = []
+    uhd: list[str] = []
     for u in urls:
-        if u and u not in seen:
-            seen.add(u)
-            out.append(u)
-    return out
+        if not u or u in seen:
+            continue
+        seen.add(u)
+        if "uhd_" in u or "3840" in u:
+            uhd.append(u)
+        else:
+            hd.append(u)
+    return hd + uhd
 
 
 def pick_free_clip(used: set[str] | None = None) -> dict | None:

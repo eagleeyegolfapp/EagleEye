@@ -812,6 +812,35 @@ def _broll_overlay_png(hook: str, dest: Path) -> None:
     img.save(dest)
 
 
+def _stage_broll_src(bin_: str, url: str, dest: Path, ua: str) -> bool:
+    """Pull the clip to disk. HTTP+overlay in one ffmpeg is what left a 0-byte reel."""
+    from free_media import download_free
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    blob = download_free(url)
+    if blob:
+        dest.write_bytes(blob)
+        print("  ig      staged", dest.stat().st_size, "bytes")
+        return True
+    cmd = [
+        bin_, "-y", "-user_agent", ua,
+        "-ss", "1", "-t", "14", "-i", url,
+        "-c", "copy", "-an",
+        str(dest),
+    ]
+    try:
+        r = __import__("subprocess").run(cmd, capture_output=True, text=True, timeout=50)
+    except Exception as e:  # noqa: BLE001
+        print("  ig      stage timeout", url.split("/")[-1][:40], e)
+        return False
+    if dest.exists() and dest.stat().st_size > 400_000:
+        print("  ig      staged copy", dest.stat().st_size, "bytes")
+        return True
+    err = (r.stderr or "")[-160:].replace("\n", " ")
+    print("  ig      stage miss", url.split("/")[-1][:40], err)
+    return False
+
+
 def render_free_reel(story: dict, hook: str) -> bytes | None:
     """Hand-picked cinematic golf B-roll, 9:16, 12s. Never Commons lottery."""
     from free_media import clip_urls, local_broll, pick_free_clip
@@ -827,7 +856,10 @@ def render_free_reel(story: dict, hook: str) -> bytes | None:
     work.mkdir(parents=True, exist_ok=True)
     overlay = work / "overlay.png"
     _broll_overlay_png(hook, overlay)
+    src_path = work / "src.mp4"
     mp4 = out_dir / f"{story.get('id') or 'ig'}-broll.mp4"
+    if mp4.exists():
+        mp4.unlink()
     sources: list[str] = []
     owned = local_broll()
     if owned:
@@ -848,16 +880,20 @@ def render_free_reel(story: dict, hook: str) -> bytes | None:
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
     )
     for src in sources:
+        local = src if not src.startswith("http") else ""
+        if not local:
+            if not _stage_broll_src(bin_, src, src_path, ua):
+                continue
+            local = str(src_path)
         cmd = [
             bin_, "-y",
-            "-user_agent", ua,
-            "-ss", "2",
-            "-i", src,
-            "-loop", "1", "-i", str(overlay),
-            "-f", "lavfi", "-t", "13", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+            "-ss", "1",
+            "-i", local,
+            "-loop", "1", "-t", "12", "-i", str(overlay),
+            "-f", "lavfi", "-t", "12", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
             "-filter_complex",
             f"[0:v]{vf}[bg];[1:v]format=rgba,scale=1080:1920[ov];"
-            "[bg][ov]overlay=0:0:format=auto[v]",
+            "[bg][ov]overlay=0:0[v]",
             "-map", "[v]", "-map", "2:a",
             "-t", "12",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
@@ -869,15 +905,16 @@ def render_free_reel(story: dict, hook: str) -> bytes | None:
             str(mp4),
         ]
         try:
-            r = __import__("subprocess").run(cmd, capture_output=True, text=True, timeout=90)
+            r = __import__("subprocess").run(cmd, capture_output=True, text=True, timeout=60)
         except Exception as e:  # noqa: BLE001
-            print("  ig      b-roll encode timeout/error", src.split("/")[-1][:40], e)
+            print("  ig      b-roll encode timeout/error", Path(src).name[:40], e)
             continue
         if r.returncode == 0 and mp4.exists() and mp4.stat().st_size > 80_000:
             print("  ig      b-roll reel", mp4.stat().st_size, "bytes")
             return mp4.read_bytes()
-        err = (r.stderr or "")[-220:].replace("\n", " ")
-        print("  ig      b-roll encode miss", src.split("/")[-1][:40], err)
+        err = (r.stderr or "")[-280:].replace("\n", " ")
+        print("  ig      b-roll encode miss", Path(src).name[:40], err)
+        (work / "last.err").write_text(r.stderr or "")
     print("  ig      b-roll failed — no cinematic clip encoded")
     return None
 

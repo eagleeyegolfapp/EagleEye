@@ -874,6 +874,8 @@ def run_once(
             force_style="free_video",
         )
         print("VISUAL     IG", (ig_pack or {}).get("style") or "skip", "· golf b-roll")
+        if not (ig_pack and ig_pack.get("video")):
+            raise SystemExit("B-roll reel failed — not posting a caption-only tweet.")
     else:
         print("  stills   scoring official frames")
         stills = official_stills(story, limit=4)
