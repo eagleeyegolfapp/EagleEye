@@ -36,7 +36,19 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--test", action="store_true", help="One post, publish now, do not consume a clock slot")
     ap.add_argument("--format", dest="fmt", default=os.environ.get("TEST_FORMAT") or "auto")
+    ap.add_argument(
+        "--reset-schedule",
+        action="store_true",
+        help="Delete queued Late posts so the next morning run rebuilds the day",
+    )
     args = ap.parse_args()
+    if args.reset_schedule:
+        print("EagleEye reset schedule")
+        print("  LATE_API_KEY", "set" if os.environ.get("LATE_API_KEY", "").strip() else "MISSING")
+        from engine import reset_schedule
+
+        reset_schedule()
+        return
     live = args.live and not args.dry_run
     print("EagleEye daily runner")
     print("  LATE_API_KEY", "set" if os.environ.get("LATE_API_KEY", "").strip() else "MISSING")

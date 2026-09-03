@@ -338,7 +338,9 @@ PAGE = r"""<!doctype html>
           </div>
         </div>
         <button class="ghost" id="run_all">Fill remaining today</button>
+        <button class="ghost" id="reset_sked" type="button">Reset schedule</button>
       </div>
+      <p class="warn">Reset schedule deletes queued Late posts only. Already-published posts stay. The 4:00 / 5:30 AM Eastern GitHub run rebuilds that day.</p>
       <p class="ok" id="msg"></p>
     </section>
 
@@ -389,6 +391,8 @@ function setBusy(on, title, kicker){
   const tb = document.getElementById("test_btn");
   if (tb) tb.disabled = on;
   document.getElementById("spot_go").disabled = on;
+  const rs = document.getElementById("reset_sked");
+  if (rs) rs.disabled = on;
   if (title) document.getElementById("ov_title").textContent = title;
   if (kicker) document.getElementById("ov_kick").textContent = kicker;
   if (on) {
@@ -430,15 +434,17 @@ async function pollBusy(){
       if (window._actStall > 100) {
         document.getElementById("ov_log").textContent = log + "\n\nStill working — if this line does not change, the last step is stuck.";
       }
-      setBusy(true, a.kind === "spotlight" ? "Building a series" : (a.kind === "fill" ? "Filling today's slots" : (a.kind === "test" ? "Test post" : "Creating a post")),
-        a.kind === "spotlight" ? "Spotlight" : (a.kind === "test" ? "Test now" : "Live run"));
+      setBusy(true, a.kind === "spotlight" ? "Building a series" : (a.kind === "fill" ? "Filling today's slots" : (a.kind === "test" ? "Test post" : (a.kind === "reset" ? "Resetting schedule" : "Creating a post"))),
+        a.kind === "spotlight" ? "Spotlight" : (a.kind === "test" ? "Test now" : (a.kind === "reset" ? "Reset schedule" : "Live run")));
       return;
     }
     if (busyTimer) { clearInterval(busyTimer); busyTimer = null; }
     setBusy(false);
     const msg = a.ok ? (a.kind === "spotlight"
       ? "Series is in Late. Independent of the daily times."
-      : "In Late. Cloud posting still runs if you close this window.")
+      : (a.kind === "reset"
+        ? "Queued Late posts deleted. Published stay. 4:00 / 5:30 AM ET rebuilds the day."
+        : "In Late. Cloud posting still runs if you close this window."))
       : (a.error || "Run finished with an error.");
     show(msg);
     const sbox = document.getElementById("spot_msg");
@@ -691,6 +697,22 @@ async function kick(fill){
 }
 document.getElementById("run").onclick = () => kick(false);
 document.getElementById("run_all").onclick = () => kick(true);
+document.getElementById("reset_sked").onclick = async () => {
+  const ok = window.confirm(
+    "Delete every scheduled Late post?\n\nAlready-published posts stay. The 4:00 / 5:30 AM Eastern GitHub run will rebuild the day."
+  );
+  if (!ok) return;
+  setBusy(true, "Resetting schedule", "Delete queued Late posts");
+  show("");
+  const r = await fetch("/api/reset-schedule", { method:"POST", headers:{"Content-Type":"application/json"}, body: "{}" });
+  const d = await r.json();
+  if (!d.started && d.error) {
+    setBusy(false);
+    show(d.error);
+    return;
+  }
+  watchBusy();
+};
 const testDd = document.getElementById("test_dd");
 document.getElementById("test_btn").onclick = (e) => {
   e.stopPropagation();
@@ -837,6 +859,18 @@ class Handler(BaseHTTPRequestHandler):
             if kind == "next":
                 cmd.append("--one")
             started, err = _start_job(cmd, kind)
+            self._send(
+                200 if started else 409,
+                json.dumps({"started": started, "error": err}).encode(),
+                "application/json",
+            )
+            return
+        if path == "/api/reset-schedule":
+            cmd = [
+                _job_python(), "-u", str(HERE / "run_daily.py"),
+                "--reset-schedule",
+            ]
+            started, err = _start_job(cmd, "reset")
             self._send(
                 200 if started else 409,
                 json.dumps({"started": started, "error": err}).encode(),

@@ -309,6 +309,34 @@ def _slot_candidates(slot: dict, now: datetime, days: set[int], ahead_days: int 
     return out
 
 
+def reset_schedule() -> dict:
+    """Wipe queued Late posts and local booked slots. Published posts stay.
+
+    The next GitHub Actions run (4:00 / 5:30 AM ET) recreates that day's slots.
+    """
+    from late_client import delete_queued_posts
+
+    print("RESET      deleting queued Late posts (published stay)")
+    deleted, failed = delete_queued_posts()
+    state = load_state()
+    posted = state.get("posted_slots") or {}
+    kept = {k: v for k, v in posted.items() if v == "published"}
+    dropped = len(posted) - len(kept)
+    state["posted_slots"] = kept
+    save_state(state)
+    print(
+        f"RESET      Late deleted={deleted} failed={failed} "
+        f"local scheduled slots cleared={dropped}"
+    )
+    print("RESET      4:00 / 5:30 AM ET GitHub run will rebuild the day")
+    return {
+        "ok": failed == 0,
+        "deleted": deleted,
+        "failed": failed,
+        "cleared_slots": dropped,
+    }
+
+
 def remaining_slots(cfg: dict, override: str | None, one: bool = False) -> list[str]:
     if override:
         return [override]

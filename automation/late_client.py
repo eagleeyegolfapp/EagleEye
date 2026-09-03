@@ -186,11 +186,61 @@ def search_tweets(account_id: str, query: str, limit: int = 10) -> list[dict]:
     return data.get("tweets") or []
 
 
-def list_posts(status: str | None = None, search: str | None = None, limit: int = 20) -> list[dict]:
-    q = [f"limit={limit}"]
+def list_posts(
+    status: str | None = None,
+    search: str | None = None,
+    limit: int = 20,
+    page: int = 1,
+) -> list[dict]:
+    q = [f"limit={limit}", f"page={max(1, int(page))}"]
     if status:
         q.append(f"status={status}")
     if search:
         q.append(f"search={urllib.parse.quote(search)}")
     data = request("GET", "/posts?" + "&".join(q))
-    return data.get("posts") or []
+    return data.get("posts") or data.get("data") or []
+
+
+QUEUED_STATUSES = {"scheduled", "pending", "queued"}
+
+
+def delete_queued_posts(rounds: int = 20) -> tuple[int, int]:
+    """Delete every Late post that has not published yet. Published posts stay."""
+    deleted = 0
+    failed = 0
+    seen: set[str] = set()
+    for _ in range(max(1, rounds)):
+        batch: list[dict] = []
+        for status in ("scheduled", None):
+            try:
+                batch = list_posts(status=status, limit=100)
+            except Exception as e:  # noqa: BLE001
+                print("  late    list failed:", e)
+                batch = []
+            queued = [
+                p
+                for p in batch
+                if str(p.get("status") or "").lower() in QUEUED_STATUSES
+            ]
+            if queued:
+                batch = queued
+                break
+        ids: list[str] = []
+        for p in batch:
+            if str(p.get("status") or "").lower() not in QUEUED_STATUSES:
+                continue
+            pid = str(p.get("_id") or p.get("id") or "")
+            if pid and pid not in seen:
+                ids.append(pid)
+                seen.add(pid)
+        if not ids:
+            break
+        for pid in ids:
+            try:
+                delete_post(pid)
+                deleted += 1
+                print("  late    deleted queued", pid)
+            except Exception as e:  # noqa: BLE001
+                failed += 1
+                print("  late    delete failed", pid, e)
+    return deleted, failed
